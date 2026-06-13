@@ -24,13 +24,35 @@
 
 ## 安装
 
-每个技能位于 `skills/` 子目录，可通过纳百川安装：
+### 方式一：一键安装全部（推荐）
 
-```
-/纳百川 github.com/potat0-Zheng/potato-skills/skills/见真章
+```bash
+git clone https://github.com/potat0-Zheng/potato-skills.git /tmp/potato-skills && \
+cp -r /tmp/potato-skills/skills/* ~/.claude/skills/ && \
+rm -rf /tmp/potato-skills
 ```
 
-或直接查看各技能的 `SKILL.md` 了解详情。
+### 方式二：安装单个技能
+
+```bash
+# 以「见真章」为例，替换 {技能名} 即可
+git clone --depth 1 --filter=blob:none --sparse \
+  https://github.com/potat0-Zheng/potato-skills.git /tmp/potato-skill && \
+cd /tmp/potato-skill && \
+git sparse-checkout set skills/见真章 && \
+cp -r skills/见真章 ~/.claude/skills/ && \
+cd ~ && rm -rf /tmp/potato-skill
+```
+
+### 方式三：直接下载单文件
+
+适合不含脚本/模板的轻量技能（如察人事、理脉络）。含资源文件的技能（如见真章、揽风云）建议用方式二。
+
+```bash
+# 替换 {技能名} 和 {文件名}（skill.md 或 SKILL.md）
+curl -o ~/.claude/skills/{技能名}/{文件名} --create-dirs \
+  https://raw.githubusercontent.com/potat0-Zheng/potato-skills/master/skills/{技能名}/{文件名}
+```
 
 ---
 
