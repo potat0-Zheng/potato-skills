@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><!-- TITLE --></title>
+<style>
+  :root { --c-text: #1a1a1a; --c-muted: #666; --c-bg: #fdfdfd; --c-card: #fafafa; --c-border: #ddd; --c-accent: #555; --c-quote-bg: #f8f8f8; }
+  body { font-family: "Microsoft YaHei","PingFang SC",system-ui,sans-serif; max-width: 860px; margin:0 auto; padding:2rem 1.5rem; line-height:1.8; color:var(--c-text); background:var(--c-bg); }
+  h1 { font-size:1.5em; border-bottom:2px solid #333; padding-bottom:0.5em; }
+  h2 { font-size:1.15em; margin-top:2em; border-left:4px solid var(--c-accent); padding-left:0.6em; }
+  h3 { font-size:1em; margin-top:1.3em; }
+  p,li { margin:0.7em 0; }
+  blockquote { border-left:3px solid #ccc; margin:0.6em 0; padding:0.3em 0.9em; background:var(--c-quote-bg); color:#444; font-size:0.93em; }
+  .ref { font-size:0.85em; color:var(--c-muted); text-decoration:none; }
+  .ref:hover { text-decoration:underline; }
+  table { width:100%; border-collapse:collapse; margin:0.8em 0; font-size:0.92em; }
+  th,td { border:1px solid var(--c-border); padding:0.45em 0.6em; text-align:left; vertical-align:top; }
+  th { background:#f0f0f0; font-weight:600; }
+  .source-A { background:#e8f5e9; } .source-B { background:#fff8e1; } .source-C { background:#fce4ec; }
+  .meta-box { background:#f5f5f5; border:1px solid #e0e0e0; border-radius:4px; padding:0.8em 1em; margin:1.2em 0; font-size:0.9em; }
+  .meta-box dt { font-weight:600; float:left; clear:left; width:7em; }
+  .meta-box dd { margin-left:7.5em; margin-bottom:0.2em; }
+  .img-card { border:1px solid #e0e0e0; border-radius:6px; padding:1em; margin:1em 0; background:var(--c-card); }
+  .img-card img { max-width:100%; height:auto; border-radius:4px; display:block; margin:0.5em 0; }
+  .img-card .caption { font-size:0.88em; color:var(--c-muted); margin-top:0.4em; }
+  .img-card .meta { font-size:0.8em; color:#999; margin-top:0.2em; }
+  .img-fallback { font-size:0.85em; color:#888; padding:1em; background:#fff3cd; border-radius:4px; }
+  hr { border:none; border-top:1px solid var(--c-border); margin:1.8em 0; }
+  .legend { font-size:0.85em; color:var(--c-muted); margin:1.2em 0 0; }
+  .subtitle { color:var(--c-muted); font-size:0.93em; }
+  .footer { text-align:center; color:#999; font-size:0.82em; }
+</style>
+</head>
+<body>
+
+<!-- CONTENT_START -->
+
+<!-- 每个报告的正文从这里开始。
+     使用标准章节结构：
+     - h2 为章标题
+     - 引用链接：<a href="#ref1" class="ref">[1]</a>
+     - 图像：<div class="img-card" id="img1"><img src="data:image/jpeg;base64,..."><div class="caption">[图1] ...</div></div>
+     - 图像回退：<div class="img-fallback">[图N] 嵌入失败，请访问<a href="...">原文</a></div>
+     - 来源索引行：<tr id="ref1" class="source-B"><td>[1]</td>...<td><a href="...">链接</a></td>...</tr>
+     - 元数据框：<div class="meta-box"><dl>...</dl></div>
+-->
+
+<!-- CONTENT_END -->
+
+</body>
+</html>
