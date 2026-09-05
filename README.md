@@ -40,15 +40,20 @@
 
 ## 安装
 
-### 方式一：一键安装全部（推荐）
+> 按目标 agent 选择目录：`claude-code-skill/skills/` → **Claude Code**；`deepseek-harness-skill/skills/` → **DeepSeek Harness（dsh）**。两区同名技能是各自环境的版本（DSH 区为 dsh 适配版），按需安装。
+
+### Claude Code（claude-code-skill/skills/）
+
+#### 方式一：一键安装全部（推荐）
 
 ```bash
 git clone https://github.com/potat0-Zheng/potato-skills.git /tmp/potato-skills && \
+mkdir -p ~/.claude/skills && \
 cp -r /tmp/potato-skills/claude-code-skill/skills/* ~/.claude/skills/ && \
 rm -rf /tmp/potato-skills
 ```
 
-### 方式二：安装单个技能
+#### 方式二：安装单个技能
 
 ```bash
 # 以「见真章」为例，替换 {技能名} 即可
@@ -56,11 +61,12 @@ git clone --depth 1 --filter=blob:none --sparse \
   https://github.com/potat0-Zheng/potato-skills.git /tmp/potato-skill && \
 cd /tmp/potato-skill && \
 git sparse-checkout set claude-code-skill/skills/见真章 && \
+mkdir -p ~/.claude/skills && \
 cp -r claude-code-skill/skills/见真章 ~/.claude/skills/ && \
 cd ~ && rm -rf /tmp/potato-skill
 ```
 
-### 方式三：直接下载单文件
+#### 方式三：直接下载单文件
 
 适合不含脚本/模板的轻量技能（如察人事、理脉络）。含资源文件的技能（如见真章、网络工具）建议用方式二。
 
@@ -68,6 +74,40 @@ cd ~ && rm -rf /tmp/potato-skill
 # 替换 {技能名} 和 {文件名}（skill.md 或 SKILL.md）
 curl -o ~/.claude/skills/{技能名}/{文件名} --create-dirs \
   https://raw.githubusercontent.com/potat0-Zheng/potato-skills/master/claude-code-skill/skills/{技能名}/{文件名}
+```
+
+### DeepSeek Harness（deepseek-harness-skill/skills/）
+
+#### 方式一：一键安装全部（推荐）
+
+```bash
+git clone https://github.com/potat0-Zheng/potato-skills.git /tmp/potato-skills && \
+mkdir -p ~/.dsh/skills && \
+cp -r /tmp/potato-skills/deepseek-harness-skill/skills/* ~/.dsh/skills/ && \
+rm -rf /tmp/potato-skills
+```
+
+#### 方式二：安装单个技能
+
+```bash
+# 以 can-guo-shi（参国是）为例，替换 {技能目录名} 即可（slug 见上方 DSH 速查）
+git clone --depth 1 --filter=blob:none --sparse \
+  https://github.com/potat0-Zheng/potato-skills.git /tmp/potato-skill && \
+cd /tmp/potato-skill && \
+git sparse-checkout set deepseek-harness-skill/skills/can-guo-shi && \
+mkdir -p ~/.dsh/skills && \
+cp -r deepseek-harness-skill/skills/can-guo-shi ~/.dsh/skills/ && \
+cd ~ && rm -rf /tmp/potato-skill
+```
+
+#### 方式三：直接下载单文件
+
+仅适合纯文本单文件技能（如 greeting）；含脚本/资源/外部依赖的技能（如 bai-bao-dai、揽风云、破虚妄）请用方式一或二。
+
+```bash
+# 替换 {技能目录名}（如 greeting）
+curl -o ~/.dsh/skills/{技能目录名}/SKILL.md --create-dirs \
+  https://raw.githubusercontent.com/potat0-Zheng/potato-skills/master/deepseek-harness-skill/skills/{技能目录名}/SKILL.md
 ```
 
 ---
