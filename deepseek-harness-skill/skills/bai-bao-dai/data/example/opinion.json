@@ -1,0 +1,113 @@
+{
+  "event": "老旧小区加装电梯（示例）",
+  "total_records": 7,
+  "stance_distribution": [
+    {
+      "stance": "支持加装",
+      "count": 3,
+      "pct": 42.9,
+      "likes": 2600,
+      "minority": false,
+      "top_samples": [
+        {
+          "author": "城市规划师",
+          "likes": 1200,
+          "content": "加装电梯方便老人出行，政策也支持，关键是费用分摊要协商透明。",
+          "url": "https://www.zhihu.com/question/12345678/answer/a1",
+          "matched": [
+            "方便老人",
+            "政策也支持"
+          ]
+        },
+        {
+          "author": "微博用户A",
+          "likes": 900,
+          "content": "支持加装电梯，老人上下楼太难了",
+          "url": "https://m.weibo.cn/detail/w1",
+          "matched": [
+            "支持加装",
+            "老人上下楼"
+          ]
+        },
+        {
+          "author": "小红用户C",
+          "likes": 500,
+          "content": "支持加装，老人上下楼终于方便了",
+          "url": "https://www.xiaohongshu.com/explore/x1",
+          "matched": [
+            "支持加装",
+            "老人上下楼"
+          ]
+        }
+      ]
+    },
+    {
+      "stance": "一楼住户反对",
+      "count": 2,
+      "pct": 28.6,
+      "likes": 1100,
+      "minority": false,
+      "top_samples": [
+        {
+          "author": "一楼住户王女士",
+          "likes": 800,
+          "content": "一楼完全用不上还要分摊费用，采光和噪音都受影响，太不公平了。",
+          "url": "https://www.zhihu.com/question/12345678/answer/a2",
+          "matched": [
+            "一楼",
+            "采光",
+            "噪音",
+            "用不上"
+          ]
+        },
+        {
+          "author": "微博用户B",
+          "likes": 300,
+          "content": "一楼采光和噪音的损失谁来补偿？反对强制分摊",
+          "url": "https://m.weibo.cn/detail/w2",
+          "matched": [
+            "一楼",
+            "采光",
+            "噪音",
+            "反对"
+          ]
+        }
+      ]
+    },
+    {
+      "stance": "质疑程序与分摊",
+      "count": 2,
+      "pct": 28.6,
+      "likes": 520,
+      "minority": false,
+      "top_samples": [
+        {
+          "author": "业委会代表",
+          "likes": 400,
+          "content": "程序上应组织全体业主表决，费用分摊方案没谈拢就强推不合适。",
+          "url": "https://www.zhihu.com/question/12345678/answer/a3",
+          "matched": [
+            "表决",
+            "费用分摊",
+            "强推"
+          ]
+        },
+        {
+          "author": "小红用户D",
+          "likes": 120,
+          "content": "不同意就该一票否决吗？多数表决通过就行？",
+          "url": "https://www.xiaohongshu.com/explore/x2",
+          "matched": [
+            "表决"
+          ]
+        }
+      ]
+    }
+  ],
+  "timeline": {
+    "2025-06-01": 3,
+    "2025-06-02": 2,
+    "2025-06-03": 2
+  },
+  "note": "单标签聚类：命中关键词最多者胜，平票按词典插入顺序；立场词典按事件定制并经 --stances 传入；少数派阈值 10%"
+}

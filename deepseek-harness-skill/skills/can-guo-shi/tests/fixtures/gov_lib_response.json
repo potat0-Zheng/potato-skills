@@ -1,0 +1,89 @@
+{
+  "_note": "实测镜像样例（2026-09-04 真实抓取结构）：catMap 含 gongwen/bumenfile/otherfile/gongbao；顶层 totalCount=0，各分类自带 totalCount；条目发布机构在 puborg、原文链接在 url、source/piclinksurl 为空串。",
+  "code": 200,
+  "msg": "操作成功",
+  "searchVO": {
+    "totalCount": 0,
+    "catMap": {
+      "gongwen": {
+        "totalCount": 12,
+        "currentNum": 2,
+        "listVO": [
+          {
+            "url": "https://www.gov.cn/zhengce/zhengceku/2022-10/31/content_5722748.htm",
+            "piclinksurl": "",
+            "pcode": "国办发〔2022〕35号",
+            "source": "",
+            "puborg": "国务院办公厅",
+            "title": "国务院办公厅关于复制推广<em>营商</em><em>环境</em>创新试点改革举措的通知",
+            "pubtimeStr": "2022.10.31",
+            "pubtime": "1667206500000",
+            "summary": "复制推广营商环境创新试点改革举措。"
+          },
+          {
+            "url": "https://www.gov.cn/zhengce/zhengceku/2022-09/15/content_5709962.htm",
+            "piclinksurl": "",
+            "pcode": "国办发〔2022〕30号",
+            "source": "",
+            "puborg": "国务院办公厅",
+            "title": "国务院办公厅关于进一步优化营商环境降低市场主体制度性交易成本的意见",
+            "pubtimeStr": "2022.09.15",
+            "pubtime": "1663232100000",
+            "summary": "降低市场主体制度性交易成本。"
+          }
+        ]
+      },
+      "bumenfile": {
+        "totalCount": 23,
+        "currentNum": 1,
+        "listVO": [
+          {
+            "url": "https://www.gov.cn/zhengce/zhengceku/202506/content_7026428.htm",
+            "piclinksurl": "",
+            "pcode": "发改能源规〔2025〕624号",
+            "source": "",
+            "puborg": "国家发展改革委 国家能源局",
+            "title": "关于深化提升“获得电力”服务水平 全面打造现代化用电营商环境的意见",
+            "pubtimeStr": "2025.06.04",
+            "pubtime": "1749006960000",
+            "summary": "全面提升“获得电力”服务水平。"
+          }
+        ]
+      },
+      "otherfile": {
+        "totalCount": 51,
+        "currentNum": 1,
+        "listVO": [
+          {
+            "url": "https://www.gov.cn/zhengce/202512/content_7049976.htm",
+            "piclinksurl": "",
+            "pcode": "",
+            "source": "",
+            "puborg": null,
+            "title": "聚焦“十五五”规划建议 | 健全规范涉企执法长效机制 助力营商环境持续优化",
+            "pubtimeStr": "2025.12.01",
+            "pubtime": "1764589320000",
+            "summary": "解读文章。"
+          }
+        ]
+      },
+      "gongbao": {
+        "totalCount": 21,
+        "currentNum": 1,
+        "listVO": [
+          {
+            "url": "https://www.gov.cn/gongbao/2025/issue_12106/202506/content_7028411.html",
+            "piclinksurl": "",
+            "pcode": "",
+            "source": "",
+            "puborg": null,
+            "title": "国家发展改革委 国家能源局关于深化提升“获得电力”服务水平　全面打造现代化用电营商<br/>　环境的意见",
+            "pubtimeStr": "2025.06.20",
+            "pubtime": "1750406400000",
+            "summary": "国务院公报载文。"
+          }
+        ]
+      }
+    }
+  }
+}

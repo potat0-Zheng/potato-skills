@@ -1,11 +1,11 @@
 # 🥔 Potato Skills
 
 > 土豆先生的 AI 技能工具箱
-> 仓库分为 `claude-code-skill/`（Claude Code 中文技能，共 11 个）与 `deepseek-harness-skill/`（DeepSeek Harness 技能，建设中）。
+> 仓库分为 `claude-code-skill/`（Claude Code 技能，共 11 个）与 `deepseek-harness-skill/`（DeepSeek Harness 技能，共 14 个，含同名技能的 dsh 适配版）。
 
 ---
 
-## 技能速查
+## Claude Code 技能速查（claude-code-skill/skills/）
 
 | 技能 | 类型 | 说明 |
 |------|------|------|
@@ -20,6 +20,21 @@
 | 破虚妄 | 事实核查 | 日常工作用事实核查——结构化核查报告 |
 | 网络工具 | 网络 | 网络连通性检测与带宽测速，含 monitor.js 脚本 |
 | 知乎 | 内容采集 | 爬取知乎问题/回答，输出 Markdown |
+
+---
+
+## DeepSeek Harness 技能速查（deepseek-harness-skill/skills/）
+
+> 以下 11 个为本仓库 Claude Code 同名技能的 **dsh 适配版**（内容按 DeepSeek Harness 环境调整，功能同上表，不再重复介绍）：
+> `can-guo-shi`（参国是）、`cha-ren-shi`（察人事）、`jian-fu-ci`（简浮辞）、`jian-zhen-zhang`（见真章）、`lan-feng-yun`（揽风云）、`li-mai-luo`（理脉络）、`na-bai-chuan`（纳百川）、`na-ling-guang`（纳灵光）、`po-xu-wang`（破虚妄）、`network-tools`（网络工具）、`zhihu`（知乎）
+
+新增技能如下：
+
+| 技能（目录名） | 类型 | 说明 |
+|------|------|------|
+| 百宝袋（bai-bao-dai） | 信息聚合 | 热点事件多方信息汇总与视点综合分析——微博/小红书/知乎三平台采集流水线 |
+| 问候语（greeting） | 小工具 | 根据当前时间自动生成对应时段的问候语 |
+| 微信读书（Tencent-WeChatReading） | 阅读助手 | 搜索书籍、管理书架、查看笔记划线、浏览书评、阅读统计、发现推荐好书 |
 
 ---
 
@@ -75,7 +90,22 @@ potato-skills/
 │       ├── 破虚妄/
 │       ├── 网络工具/      ← 含 monitor.js 连通性检测脚本
 │       └── 知乎/
-└── deepseek-harness-skill/     ← DeepSeek Harness 技能（建设中）
+└── deepseek-harness-skill/     ← DeepSeek Harness 技能
+    └── skills/
+        ├── can-guo-shi/        ← 参国是的 dsh 适配版
+        ├── cha-ren-shi/        ← 察人事的 dsh 适配版
+        ├── jian-fu-ci/         ← 简浮辞的 dsh 适配版
+        ├── jian-zhen-zhang/    ← 见真章的 dsh 适配版
+        ├── lan-feng-yun/       ← 揽风云的 dsh 适配版
+        ├── li-mai-luo/         ← 理脉络的 dsh 适配版
+        ├── na-bai-chuan/       ← 纳百川的 dsh 适配版
+        ├── na-ling-guang/      ← 纳灵光的 dsh 适配版
+        ├── po-xu-wang/         ← 破虚妄的 dsh 适配版
+        ├── network-tools/      ← 网络工具的 dsh 适配版
+        ├── zhihu/              ← 知乎的 dsh 适配版
+        ├── bai-bao-dai/        ← 百宝袋（新增）
+        ├── greeting/           ← 问候语（新增）
+        └── Tencent-WeChatReading/  ← 微信读书（新增）
 ```
 
 ---

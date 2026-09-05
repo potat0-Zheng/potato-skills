@@ -1,0 +1,41 @@
+{
+  "skill_name": "bai-bao-dai",
+  "skill_desc": "百宝袋：热点事件多方信息汇总与视点综合分析工具（采集→事实还原→舆论把握→综合报告）",
+  "platforms": {
+    "weibo": {
+      "enabled": true,
+      "primary": "MediaCrawler",
+      "deep": "weiboSpider",
+      "note": "需部署外部爬虫；MediaCrawler 覆盖微博帖子+评论，weiboSpider 补全量字段"
+    },
+    "xiaohongshu": {
+      "enabled": true,
+      "primary": "MediaCrawler",
+      "fallback": "Spider_XHS",
+      "note": "collect.py 驱动 MediaCrawler 关键词搜索（需 cookie 或 browser_data 登录态）；Spider_XHS 为备选手动方案"
+    },
+    "zhihu": {
+      "enabled": true,
+      "primary": "builtin",
+      "crawler": "zhihu/crawl.py",
+      "cookie": "zhihu/cookie.txt",
+      "note": "内嵌爬虫（自原 zhihu skill 迁移），单回答/全问题两种模式"
+    }
+  },
+  "defaults": {
+    "days": 7,
+    "max_answers": 20,
+    "max_posts": 200,
+    "max_comments": 1000
+  },
+  "rate_limit": {
+    "min_delay_s": 2,
+    "max_delay_s": 5,
+    "max_requests_per_day": 500
+  },
+  "stance_keywords": {},
+  "stance_note": "立场词典必须按事件定制：采集后由 LLM 依据实际观点分歧构造 {立场: [关键词,...]}，经 opinion.py --stances <stances.json> 传入（'无关/其他' 兜底由脚本自动补）。默认留空；为空时 opinion.py 将报错退出，不做静默错误归类。",
+  "probe": {
+    "zhihu_question": ""
+  }
+}

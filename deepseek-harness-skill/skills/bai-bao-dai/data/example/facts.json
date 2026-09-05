@@ -1,0 +1,22 @@
+{
+  "event": "老旧小区加装电梯（示例）",
+  "claims": [
+    {
+      "claim": "加装电梯须经业主协商表决（示例断言）",
+      "verdict": "待核查",
+      "reason": "示例：真实任务中由 LLM 结合多源证据裁决后回填 verdict",
+      "evidence": [],
+      "type": "general"
+    },
+    {
+      "claim": "一楼住户无需分摊费用（示例断言）",
+      "verdict": "证据不足",
+      "reason": "示例：口径因各地分摊方案而异，需注明地域与政策文件",
+      "evidence": [],
+      "type": "general"
+    }
+  ],
+  "meta": {
+    "china_sources": false
+  }
+}

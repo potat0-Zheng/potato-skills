@@ -1,0 +1,37 @@
+{
+  "_note": "实测镜像样例（2026-09-04 flk.npc.gov.cn 真实响应结构）：rows 条目含 title(带 <em class='highlight'> 高亮)/flxz 分类/zdjgName 机关/gbrq 公布/sxrq 施行/sxx 时效码/bbbs ID；sxrq 可为 null；total 为接口直接返回。",
+  "code": 200,
+  "msg": "查询成功",
+  "total": 9,
+  "searchType": 1,
+  "searchContent": "行政处罚法",
+  "rows": [
+    {
+      "title": "中华人民共和国<em class='highlight'>行政处罚法</em>",
+      "flxz": "法律",
+      "zdjgName": "全国人民代表大会",
+      "gbrq": "2021-01-22",
+      "sxrq": "2021-07-15",
+      "sxx": 3,
+      "bbbs": "ff8080817703add20177373df6a43e33"
+    },
+    {
+      "title": "中华人民共和国<em class='highlight'>行政处罚法</em>",
+      "flxz": "法律",
+      "zdjgName": "全国人民代表大会",
+      "gbrq": "2017-09-01",
+      "sxrq": "2018-01-01",
+      "sxx": 2,
+      "bbbs": "2c909fdd678bf17901678bf86fa90a7d"
+    },
+    {
+      "title": "吉林省实施《中华人民共和国<em class='highlight'>行政处罚法</em>》若干规定",
+      "flxz": "地方法规",
+      "zdjgName": "吉林省人民代表大会常务委员会",
+      "gbrq": "2010-11-26",
+      "sxrq": null,
+      "sxx": 1,
+      "bbbs": "4028abcc61277793016128518e621148"
+    }
+  ]
+}

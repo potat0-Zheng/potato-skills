@@ -1,0 +1,3 @@
+jieba>=0.42.0
+# 可选：语义相似度校验（--check）
+# sentence-transformers>=2.0.0

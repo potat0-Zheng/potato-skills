@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>老旧小区加装电梯（示例） · 综合分析报告</title>
+<!-- theme-v: 0.2.1 -->
+<!-- 本文件由 sync_theme.py 从 ~/.dsh/report-theme/ 同步分发。请勿手工修改各 skill 内的副本；
+     修改皮肤请改主模板 report-theme/report_template.html，然后运行 report-theme/sync_theme.py。 -->
+<style>
+  /* ═══════════════════ 设计令牌 · Editorial 风格（基于 Raleighawesome/html-design-skill，Apache 兼容） ═══════════════════ */
+  :root {
+    /* 底色与纸张 */
+    --ivory: #faf9f5;
+    --paper: #ffffff;
+    --slate: #141413;
+    --clay: #b0573b;
+    --oat: #e3dacc;
+    --olive: #66794f;
+    --gray-50: #f0eee6;
+    --gray-100: #e6e3da;
+    --gray-200: #d1cfc5;
+    --gray-500: #6f6e68;
+    --gray-700: #3d3d3a;
+    /* 字体（中文优先，离线回退系统字体） */
+    --serif: "Noto Serif SC","Source Han Serif SC","Songti SC",Georgia,"Times New Roman",serif;
+    --sans: system-ui,-apple-system,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+    --mono: ui-monospace,"SF Mono",Menlo,Consolas,"Microsoft YaHei",monospace;
+    --radius: 14px;
+    --focus: #7a321f;
+    /* 确定性标记语义色：▲官方 / ●多源 / △单源 */
+    --c-official: #0e6b57;
+    --c-multi: #12508f;
+    --c-single: #8a6512;
+    --c-caution: #8b2f6a;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--ivory); color: var(--slate);
+    font-family: var(--sans); font-size: 16px; line-height: 1.72;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--clay); }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+
+  /* ═══════════════════ 页面骨架 ═══════════════════ */
+  .wrap { width: min(1120px, calc(100% - 64px)); margin: 0 auto; padding-bottom: 120px; }
+
+  /* 报头区（可选，LLM 内容可自建）：eyebrow + h1 + intro + toc + hero-figure */
+  .masthead { padding: 64px 0 44px; border-bottom: 1.5px solid var(--gray-200); }
+  .hero-grid { display: grid; grid-template-columns: minmax(0,1fr) 340px; gap: 48px; align-items: end; }
+  .hero-grid > * { min-width: 0; }
+  .eyebrow { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; color: var(--gray-500); font-family: var(--mono); font-size: 12px; letter-spacing: .06em; }
+  .eyebrow::before { content: ""; width: 24px; height: 2px; background: var(--clay); flex: none; }
+  h1 { max-width: 24ch; margin: 0; font-family: var(--serif); font-weight: 600; font-size: clamp(32px, 4.6vw, 52px); line-height: 1.14; }
+  h1 em { color: var(--clay); font-style: italic; }
+  .intro { max-width: 640px; margin: 20px 0 0; color: var(--gray-700); font-size: 16px; }
+  .hero-figure { min-width: 0; margin: 0; padding: 18px; border: 1.5px solid var(--slate); border-radius: var(--radius); background: var(--paper); box-shadow: 0 12px 32px rgb(20 20 19 / 10%); }
+  .hero-figure .kpi { font-family: var(--serif); font-size: 42px; line-height: 1.05; margin: 0 0 8px; }
+  .hero-figure .kpi span { color: var(--clay); }
+  .hero-figure .kpi-sub { font-family: var(--mono); font-size: 11px; color: var(--gray-500); letter-spacing: .06em; text-transform: uppercase; margin: 0 0 14px; }
+  .hero-figure ul { margin: 0; padding-left: 18px; color: var(--gray-700); font-size: 13px; }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 24px; }
+  .toc a, .pill { padding: 7px 14px; border: 1.5px solid var(--gray-200); border-radius: 999px; background: var(--paper); color: var(--gray-700); font-size: 12.5px; text-decoration: none; }
+  .toc a:hover { border-color: var(--slate); color: var(--slate); }
+
+  /* ═══════════════════ 章节与标题（程序化与 LLM 内容共用） ═══════════════════ */
+  section { margin-top: 64px; scroll-margin-top: 28px; }
+  h2, h3, h4 { font-family: var(--serif); font-weight: 600; color: var(--slate); }
+  h2 { font-size: 26px; margin: 2em 0 0.6em; padding-bottom: 0.35em; border-bottom: 1.5px solid var(--gray-200); }
+  h2:first-child { margin-top: 0; }
+  h3 { font-size: 20px; margin: 1.6em 0 0.5em; }
+  h4 { font-size: 16px; margin: 1.3em 0 0.4em; color: var(--gray-700); }
+  /* 编号章节头（LLM 可选增强）：01/02/03 序号 */
+  .section-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 10px; }
+  .section-head .index { width: 44px; color: var(--clay); font-family: var(--serif); font-size: 19px; font-weight: 700; letter-spacing: .02em; flex: none; }
+  .section-head h2 { margin: 0; border-bottom: none; padding-bottom: 0; }
+  .section-intro { max-width: 700px; margin: 0 0 24px 50px; color: var(--gray-700); font-size: 14.5px; }
+
+  /* ═══════════════════ 正文排版（中文友好） ═══════════════════ */
+  p { max-width: 72ch; }
+  p, li { margin: 0.7em 0; }
+  ol, ul { margin: 0.6em 0; padding-left: 1.6em; }
+  blockquote { border-left: 3px solid var(--gray-200); margin: 0.8em 0; padding: 0.3em 0.9em; background: var(--paper); color: var(--gray-700); font-size: 0.95em; }
+  code { background: var(--gray-50); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.9em; font-family: var(--mono); }
+  .subtitle { color: var(--gray-500); font-size: 0.95em; }
+  .caption { font-family: var(--mono); font-size: 11.5px; line-height: 1.68; color: var(--gray-500); margin: 12px 0 0; max-width: 78ch; }
+
+  /* ═══════════════════ 结论速览卡（meta-box，百宝袋程序化输出） ═══════════════════ */
+  .meta-box { margin: 1.4em 0; padding: 20px 24px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); background: var(--paper); font-size: 0.95em; }
+  .meta-box dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; margin: 0; }
+  .meta-box dt { font-family: var(--mono); font-size: 11.5px; letter-spacing: .05em; color: var(--gray-500); padding-top: 2px; }
+  .meta-box dd { margin: 0; }
+
+  /* ═══════════════════ 表格（来源索引 / 立场分布 / 覆盖声明） ═══════════════════ */
+  table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 13.5px; background: var(--paper); }
+  th, td { border: 1px solid var(--gray-100); padding: 0.5em 0.7em; text-align: left; vertical-align: top; }
+  th { background: var(--oat); font-weight: 600; font-family: var(--serif); }
+  tbody tr:nth-child(even) { background: var(--gray-50); }
+  /* 来源分级着色（A=官方/权威，B=主流，C=自媒体） */
+  .source-A, tr.source-A { background: #e9efe0; }
+  .source-B, tr.source-B { background: #f6f4ee; }
+  .source-C, tr.source-C { background: #f4e9e3; }
+  /* 来源索引锚点行：编号列等宽 */
+  tr[id^="ref"] td:first-child { font-family: var(--mono); color: var(--gray-500); white-space: nowrap; }
+
+  /* ═══════════════════ 引用与确定性标记 ═══════════════════ */
+  .ref { font-size: 0.85em; color: var(--clay); text-decoration: none; font-family: var(--mono); }
+  .ref:hover { text-decoration: underline; }
+  .mark { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 5px; font-family: var(--mono); font-size: 11px; line-height: 1.6; }
+  .mark-official { background: #e3efe9; color: var(--c-official); }   /* ▲ 官方确认 */
+  .mark-multi { background: #e4ecf5; color: var(--c-multi); }         /* ● 多源一致 */
+  .mark-single { background: #f3ead9; color: var(--c-single); }       /* △ 单源存疑 */
+  .mark-caution { background: #f3e3ec; color: var(--c-caution); }
+  .legend { font-size: 0.85em; color: var(--gray-500); margin: 1.2em 0 0; font-family: var(--mono); }
+
+  /* ═══════════════════ 时间线 / 立场 / 卡片（LLM 内容组件） ═══════════════════ */
+  .report-list { margin-left: 50px; }
+  .report-row { display: grid; grid-template-columns: 130px 1fr; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--gray-100); align-items: start; }
+  .report-row time, .report-owner { color: var(--gray-500); font-family: var(--mono); font-size: 11px; }
+  .report-row strong { display: block; margin-bottom: 4px; font-family: var(--serif); font-size: 17px; font-weight: 600; }
+  /* 立场区专用：标签列 + 内容列 */
+  .stance-row { display: grid; grid-template-columns: 110px 1fr; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--gray-100); align-items: start; }
+  .stance-row .label { color: var(--clay); font-family: var(--serif); font-size: 16px; font-weight: 600; }
+  .stance-row .label .mark { display: block; margin: 6px 0 0; width: fit-content; }
+  .stance-row p { margin: 0; color: var(--gray-700); font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px,100%),1fr)); gap: 20px; margin-left: 50px; }
+  .card { display: flex; min-height: 150px; flex-direction: column; padding: 22px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); background: var(--paper); transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease; }
+  .card:hover { transform: translateY(-3px); border-color: var(--slate); box-shadow: 0 10px 28px rgb(20 20 19 / 9%); }
+  .card h3 { margin: 0 0 8px; font-size: 20px; }
+  .card p { margin: 0; color: var(--gray-700); font-size: 14px; }
+  .card .meta { margin-top: auto; padding-top: 20px; color: var(--gray-500); font-family: var(--mono); font-size: 11px; }
+  .note { margin: 1.2em 0 1.2em 50px; padding: 18px 22px; border-left: 4px solid var(--olive); background: var(--paper); color: var(--gray-700); }
+
+  /* 图像（预留，与 v0.1 兼容） */
+  .img-card { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 1em; margin: 1em 0; background: var(--paper); }
+  .img-card img { max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 0.5em 0; }
+  .img-card .meta { font-size: 0.8em; color: var(--gray-500); margin-top: 0.2em; font-family: var(--mono); }
+  .img-fallback { font-size: 0.85em; color: var(--gray-700); padding: 1em; background: #f7efdc; border-radius: 8px; }
+
+  hr { border: none; border-top: 1.5px solid var(--gray-200); margin: 1.8em 0; }
+
+  /* ═══════════════════ 页脚 ═══════════════════ */
+  footer { margin-top: 96px; padding-top: 32px; border-top: 1.5px solid var(--gray-200); color: var(--gray-500); font-size: 13px; }
+  .footer { text-align: center; color: var(--gray-500); font-size: 0.82em; margin-top: 3em; }
+
+  /* ═══════════════════ 响应式 ═══════════════════ */
+  @media (max-width: 880px) { .hero-grid { grid-template-columns: 1fr; } .hero-figure { max-width: 420px; } }
+  @media (max-width: 640px) {
+    .wrap { width: min(100% - 40px, 1120px); }
+    .masthead { padding-top: 48px; }
+    .section-intro, .grid, .note, .report-list { margin-left: 0; }
+    .report-row, .stance-row { grid-template-columns: 1fr; gap: 6px; }
+    .stance-row .label .mark { display: inline-block; margin: 0 0 0 6px; }
+    .meta-box dl { grid-template-columns: 1fr; gap: 2px 0; }
+  }
+
+  /* ═══════════════════ 无障碍与打印 ═══════════════════ */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  }
+  @media print {
+    body { background: #fff; color: #000; font-size: 12px; }
+    .wrap { width: 100%; padding: 0; }
+    nav, .toc { display: none; }
+    h2 { break-before: page; page-break-after: avoid; }
+    h2:first-child { break-before: auto; }
+    .card, .hero-figure, .note, .meta-box, table { break-inside: avoid; box-shadow: none; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<!-- CONTENT_START -->
+<h2>一、结论速览</h2>
+<div class="meta-box"><dl>
+<dt>事件</dt><dd><strong>老旧小区加装电梯（示例）</strong></dd>
+<dt>采集量</dt><dd>7 条记录（微博 2, 小红书 2, 知乎 3）</dd>
+<dt>事实核查</dt><dd>共 2 条断言 → 证据不足 1；待核查 1</dd>
+<dt>舆论主立场</dt><dd>支持加装（42.9% · 3 条）</dd>
+<dt>时间跨度</dt><dd>2025-06-01 ~ 2025-06-03</dd>
+</dl></div>
+<p class="legend">确定性标记：▲官方确认 / ●多源一致 / △单源存疑。本页由脚本自动汇总，深度结论见后续章节。</p>
+<h2>二、事件时间线</h2>
+<table><tr><th>日期</th><th>记录数</th></tr>
+<tr><td>2025-06-01</td><td>3</td></tr>
+<tr><td>2025-06-02</td><td>2</td></tr>
+<tr><td>2025-06-03</td><td>2</td></tr>
+</table>
+<h2>三、核心事实汇编</h2>
+<table><tr><th>#</th><th>断言</th><th>结论</th><th>说明</th><th>证据源</th></tr>
+<tr><td>1</td><td>加装电梯须经业主协商表决（示例断言）</td><td>待核查</td><td>示例：真实任务中由 LLM 结合多源证据裁决后回填 verdict</td><td>—</td></tr>
+<tr><td>2</td><td>一楼住户无需分摊费用（示例断言）</td><td>证据不足</td><td>示例：口径因各地分摊方案而异，需注明地域与政策文件</td><td>—</td></tr>
+</table>
+<h2>四、事实核查结果</h2>
+<table><tr><th>断言</th><th>结论</th><th>理由</th></tr>
+<tr><td>加装电梯须经业主协商表决（示例断言）</td><td><strong>待核查</strong></td><td>示例：真实任务中由 LLM 结合多源证据裁决后回填 verdict</td></tr>
+<tr><td>一楼住户无需分摊费用（示例断言）</td><td><strong>证据不足</strong></td><td>示例：口径因各地分摊方案而异，需注明地域与政策文件</td></tr>
+</table>
+<p class="legend">结论由 LLM 结合多源证据裁决：真实 / 部分真实 / 失实 / 证据不足 / 待核查。</p>
+<h2>五、舆论观点综合</h2>
+<table><tr><th>立场</th><th>占比</th><th>条数</th><th>少数派</th><th>高赞代表（前3）</th></tr>
+<tr><td>支持加装</td><td>42.9%</td><td>3</td><td>—</td><td>[赞1200] 加装电梯方便老人出行，政策也支持，关键是费用分摊要协商透明。；[赞900] 支持加装电梯，老人上下楼太难了；[赞500] 支持加装，老人上下楼终于方便了</td></tr>
+<tr><td>一楼住户反对</td><td>28.6%</td><td>2</td><td>—</td><td>[赞800] 一楼完全用不上还要分摊费用，采光和噪音都受影响，太不公平了。；[赞300] 一楼采光和噪音的损失谁来补偿？反对强制分摊</td></tr>
+<tr><td>质疑程序与分摊</td><td>28.6%</td><td>2</td><td>—</td><td>[赞400] 程序上应组织全体业主表决，费用分摊方案没谈拢就强推不合适。；[赞120] 不同意就该一票否决吗？多数表决通过就行？</td></tr>
+</table>
+<p>焦点时间分布见第二章时间线。</p>
+<h3>视点综合（LLM 分析）</h3>
+<h3>视点综合（示例）</h3>
+<ul>
+<li><strong>主流立场</strong>：支持加装——老人出行刚需是主要动因</li>
+<li><strong>对立观点</strong>：一楼住户反对——自述采光 / 噪音 / 费用分摊受损</li>
+<li><strong>少数派</strong>：质疑程序方——主张先全体表决、谈拢分摊再施工</li>
+<blockquote>
+示例数据仅供演示流水线；真实任务中本文件由 LLM 依据 opinion.md 撰写。
+</ul>
+</blockquote>
+<h2>六、来源索引</h2>
+<table><tr><th>编号</th><th>来源</th><th>URL</th></tr>
+<tr id="ref1"><td>[1]</td><td>微博·微博用户A</td><td><a href="https://m.weibo.cn/detail/w1" target="_blank" rel="noopener">链接</a></td></tr>
+<tr id="ref2"><td>[2]</td><td>微博·微博用户B</td><td><a href="https://m.weibo.cn/detail/w2" target="_blank" rel="noopener">链接</a></td></tr>
+<tr id="ref3"><td>[3]</td><td>小红书·小红用户C</td><td><a href="https://www.xiaohongshu.com/explore/x1" target="_blank" rel="noopener">链接</a></td></tr>
+<tr id="ref4"><td>[4]</td><td>小红书·小红用户D</td><td><a href="https://www.xiaohongshu.com/explore/x2" target="_blank" rel="noopener">链接</a></td></tr>
+<tr id="ref5"><td>[5]</td><td>知乎·城市规划师</td><td><a href="https://www.zhihu.com/question/12345678/answer/a1" target="_blank" rel="noopener">链接</a></td></tr>
+<tr id="ref6"><td>[6]</td><td>知乎·一楼住户王女士</td><td><a href="https://www.zhihu.com/question/12345678/answer/a2" target="_blank" rel="noopener">链接</a></td></tr>
+<tr id="ref7"><td>[7]</td><td>知乎·业委会代表</td><td><a href="https://www.zhihu.com/question/12345678/answer/a3" target="_blank" rel="noopener">链接</a></td></tr>
+</table>
+<h2>七、覆盖完整性声明</h2>
+<table><tr><th>平台/信源</th><th>状态</th></tr>
+<tr><td>知乎</td><td>已采集 3 条</td></tr>
+<tr><td>微博</td><td>已采集 2 条</td></tr>
+<tr><td>小红书</td><td>已采集 2 条</td></tr>
+<tr><td>事实证据</td><td>2 条断言中 2 条无自动证据（依赖 LLM 多源核查）</td></tr>
+</table>
+<h3>覆盖完整性（示例）</h3>
+<ul>
+<li>知乎 / 微博 / 小红书均已采集示例记录</li>
+<li>立场维度：支持方、一楼住户反对方、程序质疑方均已覆盖</li>
+<li>真实任务中此处需列明：未采到平台及原因、未回应方、信源稀缺度标注、平台治理造成的样本偏差</li>
+</ul>
+<h2>八、方法论</h2><p>本报告由 bai-bao-dai（百宝袋）四阶段流水线生成：</p><ol><li><strong>采集</strong>：知乎内嵌爬虫 / MediaCrawler（微博·小红书）关键词搜索，仅限公开信息；</li><li><strong>事实还原</strong>：多源交叉与证据分级（china_sources 初查 + LLM 逐条裁决：真实/部分真实/失实/证据不足）；</li><li><strong>舆论把握</strong>：按立场词典单标签聚类（命中关键词最多者胜），识别 &lt;10% 少数派；</li><li><strong>综合报告</strong>：本 HTML 九章结构。</li></ol><p class="legend">确定性标记：▲官方确认 / ●多源一致 / △单源存疑。未确认信息不伪装成事实。</p>
+<h2>九、信息与生成时间戳</h2>
+<div class="meta-box"><dl>
+<dt>报告生成</dt><dd>2026-09-03 20:02:29</dd>
+<dt>信息截止</dt><dd>2025-06-03（最后一条采集记录时间；搜索引擎索引有延迟，结论可能滞后）</dd>
+</dl></div>
+<p class="footer">由 bai-bao-dai（百宝袋）生成 · 仅供学习研究</p>
+<!-- CONTENT_END -->
+
+<!-- 每个报告的正文从这里开始（h2 为章标题）。
+     注意：内容已由模板自动包裹在 <main class="wrap"> 容器内（页边距/居中已生效），
+     正文里请勿再包一层 .wrap，直接写章节与组件即可。
+     组件约定（v0.2 Editorial）：
+     - 结论速览：<div class="meta-box"><dl><dt>键</dt><dd>值</dd>...</dl></div>
+     - 引用链接：<a href="#refN" class="ref">[N]</a>；来源索引锚点行：<tr id="refN" class="source-B"><td>[N]</td>...</tr>
+     - 确定性标记：<span class="mark mark-official">▲官方</span> / mark-multi ● / mark-single △ / mark-caution
+     - 时间线：<div class="report-list"><article class="report-row"><time>日期</time><div><strong>标题</strong><span>说明</span></div></article></div>
+     - 立场：<article class="stance-row"><span class="label">立场名</span><p>内容</p></article>
+     - 卡片：<div class="grid"><article class="card"><h3>...</h3><p>...</p><div class="meta">元数据</div></article></div>
+     - 编号章节头（可选）：<div class="section-head"><span class="index">01</span><h2>章名</h2></div>
+     - 图例/说明：<p class="legend">...</p>；重点框：<aside class="note">...</aside>
+     - 图像：<div class="img-card">...<div class="caption">[图N]</div></div>；回退：<div class="img-fallback">
+     中文排版：正文 16px/行高1.72；标题衬线体；元数据与编号用等宽字体。
+-->
+
+<!-- CONTENT_END -->
+
+</main>
+</body>
+</html>

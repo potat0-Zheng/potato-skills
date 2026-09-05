@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><!-- TITLE --></title>
+<!-- theme-v: 0.2.1 -->
+<!-- 本文件由 sync_theme.py 从 ~/.dsh/report-theme/ 同步分发。请勿手工修改各 skill 内的副本；
+     修改皮肤请改主模板 report-theme/report_template.html，然后运行 report-theme/sync_theme.py。 -->
+<style>
+  /* ═══════════════════ 设计令牌 · Editorial 风格（基于 Raleighawesome/html-design-skill，Apache 兼容） ═══════════════════ */
+  :root {
+    /* 底色与纸张 */
+    --ivory: #faf9f5;
+    --paper: #ffffff;
+    --slate: #141413;
+    --clay: #b0573b;
+    --oat: #e3dacc;
+    --olive: #66794f;
+    --gray-50: #f0eee6;
+    --gray-100: #e6e3da;
+    --gray-200: #d1cfc5;
+    --gray-500: #6f6e68;
+    --gray-700: #3d3d3a;
+    /* 字体（中文优先，离线回退系统字体） */
+    --serif: "Noto Serif SC","Source Han Serif SC","Songti SC",Georgia,"Times New Roman",serif;
+    --sans: system-ui,-apple-system,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+    --mono: ui-monospace,"SF Mono",Menlo,Consolas,"Microsoft YaHei",monospace;
+    --radius: 14px;
+    --focus: #7a321f;
+    /* 确定性标记语义色：▲官方 / ●多源 / △单源 */
+    --c-official: #0e6b57;
+    --c-multi: #12508f;
+    --c-single: #8a6512;
+    --c-caution: #8b2f6a;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--ivory); color: var(--slate);
+    font-family: var(--sans); font-size: 16px; line-height: 1.72;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--clay); }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+
+  /* ═══════════════════ 页面骨架 ═══════════════════ */
+  .wrap { width: min(1120px, calc(100% - 64px)); margin: 0 auto; padding-bottom: 120px; }
+
+  /* 报头区（可选，LLM 内容可自建）：eyebrow + h1 + intro + toc + hero-figure */
+  .masthead { padding: 64px 0 44px; border-bottom: 1.5px solid var(--gray-200); }
+  .hero-grid { display: grid; grid-template-columns: minmax(0,1fr) 340px; gap: 48px; align-items: end; }
+  .hero-grid > * { min-width: 0; }
+  .eyebrow { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; color: var(--gray-500); font-family: var(--mono); font-size: 12px; letter-spacing: .06em; }
+  .eyebrow::before { content: ""; width: 24px; height: 2px; background: var(--clay); flex: none; }
+  h1 { max-width: 24ch; margin: 0; font-family: var(--serif); font-weight: 600; font-size: clamp(32px, 4.6vw, 52px); line-height: 1.14; }
+  h1 em { color: var(--clay); font-style: italic; }
+  .intro { max-width: 640px; margin: 20px 0 0; color: var(--gray-700); font-size: 16px; }
+  .hero-figure { min-width: 0; margin: 0; padding: 18px; border: 1.5px solid var(--slate); border-radius: var(--radius); background: var(--paper); box-shadow: 0 12px 32px rgb(20 20 19 / 10%); }
+  .hero-figure .kpi { font-family: var(--serif); font-size: 42px; line-height: 1.05; margin: 0 0 8px; }
+  .hero-figure .kpi span { color: var(--clay); }
+  .hero-figure .kpi-sub { font-family: var(--mono); font-size: 11px; color: var(--gray-500); letter-spacing: .06em; text-transform: uppercase; margin: 0 0 14px; }
+  .hero-figure ul { margin: 0; padding-left: 18px; color: var(--gray-700); font-size: 13px; }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 24px; }
+  .toc a, .pill { padding: 7px 14px; border: 1.5px solid var(--gray-200); border-radius: 999px; background: var(--paper); color: var(--gray-700); font-size: 12.5px; text-decoration: none; }
+  .toc a:hover { border-color: var(--slate); color: var(--slate); }
+
+  /* ═══════════════════ 章节与标题（程序化与 LLM 内容共用） ═══════════════════ */
+  section { margin-top: 64px; scroll-margin-top: 28px; }
+  h2, h3, h4 { font-family: var(--serif); font-weight: 600; color: var(--slate); }
+  h2 { font-size: 26px; margin: 2em 0 0.6em; padding-bottom: 0.35em; border-bottom: 1.5px solid var(--gray-200); }
+  h2:first-child { margin-top: 0; }
+  h3 { font-size: 20px; margin: 1.6em 0 0.5em; }
+  h4 { font-size: 16px; margin: 1.3em 0 0.4em; color: var(--gray-700); }
+  /* 编号章节头（LLM 可选增强）：01/02/03 序号 */
+  .section-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 10px; }
+  .section-head .index { width: 44px; color: var(--clay); font-family: var(--serif); font-size: 19px; font-weight: 700; letter-spacing: .02em; flex: none; }
+  .section-head h2 { margin: 0; border-bottom: none; padding-bottom: 0; }
+  .section-intro { max-width: 700px; margin: 0 0 24px 50px; color: var(--gray-700); font-size: 14.5px; }
+
+  /* ═══════════════════ 正文排版（中文友好） ═══════════════════ */
+  p { max-width: 72ch; }
+  p, li { margin: 0.7em 0; }
+  ol, ul { margin: 0.6em 0; padding-left: 1.6em; }
+  blockquote { border-left: 3px solid var(--gray-200); margin: 0.8em 0; padding: 0.3em 0.9em; background: var(--paper); color: var(--gray-700); font-size: 0.95em; }
+  code { background: var(--gray-50); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.9em; font-family: var(--mono); }
+  .subtitle { color: var(--gray-500); font-size: 0.95em; }
+  .caption { font-family: var(--mono); font-size: 11.5px; line-height: 1.68; color: var(--gray-500); margin: 12px 0 0; max-width: 78ch; }
+
+  /* ═══════════════════ 结论速览卡（meta-box，百宝袋程序化输出） ═══════════════════ */
+  .meta-box { margin: 1.4em 0; padding: 20px 24px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); background: var(--paper); font-size: 0.95em; }
+  .meta-box dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; margin: 0; }
+  .meta-box dt { font-family: var(--mono); font-size: 11.5px; letter-spacing: .05em; color: var(--gray-500); padding-top: 2px; }
+  .meta-box dd { margin: 0; }
+
+  /* ═══════════════════ 表格（来源索引 / 立场分布 / 覆盖声明） ═══════════════════ */
+  table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 13.5px; background: var(--paper); }
+  th, td { border: 1px solid var(--gray-100); padding: 0.5em 0.7em; text-align: left; vertical-align: top; }
+  th { background: var(--oat); font-weight: 600; font-family: var(--serif); }
+  tbody tr:nth-child(even) { background: var(--gray-50); }
+  /* 来源分级着色（A=官方/权威，B=主流，C=自媒体） */
+  .source-A, tr.source-A { background: #e9efe0; }
+  .source-B, tr.source-B { background: #f6f4ee; }
+  .source-C, tr.source-C { background: #f4e9e3; }
+  /* 来源索引锚点行：编号列等宽 */
+  tr[id^="ref"] td:first-child { font-family: var(--mono); color: var(--gray-500); white-space: nowrap; }
+
+  /* ═══════════════════ 引用与确定性标记 ═══════════════════ */
+  .ref { font-size: 0.85em; color: var(--clay); text-decoration: none; font-family: var(--mono); }
+  .ref:hover { text-decoration: underline; }
+  .mark { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 5px; font-family: var(--mono); font-size: 11px; line-height: 1.6; }
+  .mark-official { background: #e3efe9; color: var(--c-official); }   /* ▲ 官方确认 */
+  .mark-multi { background: #e4ecf5; color: var(--c-multi); }         /* ● 多源一致 */
+  .mark-single { background: #f3ead9; color: var(--c-single); }       /* △ 单源存疑 */
+  .mark-caution { background: #f3e3ec; color: var(--c-caution); }
+  .legend { font-size: 0.85em; color: var(--gray-500); margin: 1.2em 0 0; font-family: var(--mono); }
+
+  /* ═══════════════════ 时间线 / 立场 / 卡片（LLM 内容组件） ═══════════════════ */
+  .report-list { margin-left: 50px; }
+  .report-row { display: grid; grid-template-columns: 130px 1fr; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--gray-100); align-items: start; }
+  .report-row time, .report-owner { color: var(--gray-500); font-family: var(--mono); font-size: 11px; }
+  .report-row strong { display: block; margin-bottom: 4px; font-family: var(--serif); font-size: 17px; font-weight: 600; }
+  /* 立场区专用：标签列 + 内容列 */
+  .stance-row { display: grid; grid-template-columns: 110px 1fr; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--gray-100); align-items: start; }
+  .stance-row .label { color: var(--clay); font-family: var(--serif); font-size: 16px; font-weight: 600; }
+  .stance-row .label .mark { display: block; margin: 6px 0 0; width: fit-content; }
+  .stance-row p { margin: 0; color: var(--gray-700); font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px,100%),1fr)); gap: 20px; margin-left: 50px; }
+  .card { display: flex; min-height: 150px; flex-direction: column; padding: 22px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); background: var(--paper); transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease; }
+  .card:hover { transform: translateY(-3px); border-color: var(--slate); box-shadow: 0 10px 28px rgb(20 20 19 / 9%); }
+  .card h3 { margin: 0 0 8px; font-size: 20px; }
+  .card p { margin: 0; color: var(--gray-700); font-size: 14px; }
+  .card .meta { margin-top: auto; padding-top: 20px; color: var(--gray-500); font-family: var(--mono); font-size: 11px; }
+  .note { margin: 1.2em 0 1.2em 50px; padding: 18px 22px; border-left: 4px solid var(--olive); background: var(--paper); color: var(--gray-700); }
+
+  /* 图像（预留，与 v0.1 兼容） */
+  .img-card { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 1em; margin: 1em 0; background: var(--paper); }
+  .img-card img { max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 0.5em 0; }
+  .img-card .meta { font-size: 0.8em; color: var(--gray-500); margin-top: 0.2em; font-family: var(--mono); }
+  .img-fallback { font-size: 0.85em; color: var(--gray-700); padding: 1em; background: #f7efdc; border-radius: 8px; }
+
+  hr { border: none; border-top: 1.5px solid var(--gray-200); margin: 1.8em 0; }
+
+  /* ═══════════════════ 页脚 ═══════════════════ */
+  footer { margin-top: 96px; padding-top: 32px; border-top: 1.5px solid var(--gray-200); color: var(--gray-500); font-size: 13px; }
+  .footer { text-align: center; color: var(--gray-500); font-size: 0.82em; margin-top: 3em; }
+
+  /* ═══════════════════ 响应式 ═══════════════════ */
+  @media (max-width: 880px) { .hero-grid { grid-template-columns: 1fr; } .hero-figure { max-width: 420px; } }
+  @media (max-width: 640px) {
+    .wrap { width: min(100% - 40px, 1120px); }
+    .masthead { padding-top: 48px; }
+    .section-intro, .grid, .note, .report-list { margin-left: 0; }
+    .report-row, .stance-row { grid-template-columns: 1fr; gap: 6px; }
+    .stance-row .label .mark { display: inline-block; margin: 0 0 0 6px; }
+    .meta-box dl { grid-template-columns: 1fr; gap: 2px 0; }
+  }
+
+  /* ═══════════════════ 无障碍与打印 ═══════════════════ */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  }
+  @media print {
+    body { background: #fff; color: #000; font-size: 12px; }
+    .wrap { width: 100%; padding: 0; }
+    nav, .toc { display: none; }
+    h2 { break-before: page; page-break-after: avoid; }
+    h2:first-child { break-before: auto; }
+    .card, .hero-figure, .note, .meta-box, table { break-inside: avoid; box-shadow: none; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<!-- CONTENT_START -->
+
+<!-- 每个报告的正文从这里开始（h2 为章标题）。
+     注意：内容已由模板自动包裹在 <main class="wrap"> 容器内（页边距/居中已生效），
+     正文里请勿再包一层 .wrap，直接写章节与组件即可。
+     组件约定（v0.2 Editorial）：
+     - 结论速览：<div class="meta-box"><dl><dt>键</dt><dd>值</dd>...</dl></div>
+     - 引用链接：<a href="#refN" class="ref">[N]</a>；来源索引锚点行：<tr id="refN" class="source-B"><td>[N]</td>...</tr>
+     - 确定性标记：<span class="mark mark-official">▲官方</span> / mark-multi ● / mark-single △ / mark-caution
+     - 时间线：<div class="report-list"><article class="report-row"><time>日期</time><div><strong>标题</strong><span>说明</span></div></article></div>
+     - 立场：<article class="stance-row"><span class="label">立场名</span><p>内容</p></article>
+     - 卡片：<div class="grid"><article class="card"><h3>...</h3><p>...</p><div class="meta">元数据</div></article></div>
+     - 编号章节头（可选）：<div class="section-head"><span class="index">01</span><h2>章名</h2></div>
+     - 图例/说明：<p class="legend">...</p>；重点框：<aside class="note">...</aside>
+     - 图像：<div class="img-card">...<div class="caption">[图N]</div></div>；回退：<div class="img-fallback">
+     中文排版：正文 16px/行高1.72；标题衬线体；元数据与编号用等宽字体。
+-->
+
+<!-- CONTENT_END -->
+
+</main>
+</body>
+</html>
