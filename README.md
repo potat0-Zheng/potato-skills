@@ -1,7 +1,7 @@
 # 🥔 Potato Skills
 
-> 土豆先生的 Claude Code 中文技能工具箱
-> 共 11 个技能，覆盖政策分析、事实核查、信息汇编、文本处理、知识管理、网络工具等领域。
+> 土豆先生的 AI 技能工具箱
+> 仓库分为 `claude-code-skill/`（Claude Code 中文技能，共 11 个）与 `deepseek-harness-skill/`（DeepSeek Harness 技能，建设中）。
 
 ---
 
@@ -29,7 +29,7 @@
 
 ```bash
 git clone https://github.com/potat0-Zheng/potato-skills.git /tmp/potato-skills && \
-cp -r /tmp/potato-skills/skills/* ~/.claude/skills/ && \
+cp -r /tmp/potato-skills/claude-code-skill/skills/* ~/.claude/skills/ && \
 rm -rf /tmp/potato-skills
 ```
 
@@ -40,8 +40,8 @@ rm -rf /tmp/potato-skills
 git clone --depth 1 --filter=blob:none --sparse \
   https://github.com/potat0-Zheng/potato-skills.git /tmp/potato-skill && \
 cd /tmp/potato-skill && \
-git sparse-checkout set skills/见真章 && \
-cp -r skills/见真章 ~/.claude/skills/ && \
+git sparse-checkout set claude-code-skill/skills/见真章 && \
+cp -r claude-code-skill/skills/见真章 ~/.claude/skills/ && \
 cd ~ && rm -rf /tmp/potato-skill
 ```
 
@@ -52,7 +52,7 @@ cd ~ && rm -rf /tmp/potato-skill
 ```bash
 # 替换 {技能名} 和 {文件名}（skill.md 或 SKILL.md）
 curl -o ~/.claude/skills/{技能名}/{文件名} --create-dirs \
-  https://raw.githubusercontent.com/potat0-Zheng/potato-skills/master/skills/{技能名}/{文件名}
+  https://raw.githubusercontent.com/potat0-Zheng/potato-skills/master/claude-code-skill/skills/{技能名}/{文件名}
 ```
 
 ---
@@ -62,18 +62,20 @@ curl -o ~/.claude/skills/{技能名}/{文件名} --create-dirs \
 ```
 potato-skills/
 ├── README.md
-└── skills/
-    ├── 参国是/
-    ├── 察人事/
-    ├── 简浮辞/
-    ├── 见真章/        ← 资源最丰富（含模板、范例、参考框架）
-    ├── 揽风云/
-    ├── 理脉络/
-    ├── 纳百川/
-    ├── 纳灵光/
-    ├── 破虚妄/
-    ├── 网络工具/      ← 含 monitor.js 连通性检测脚本
-    └── 知乎/
+├── claude-code-skill/          ← Claude Code 技能
+│   └── skills/
+│       ├── 参国是/
+│       ├── 察人事/
+│       ├── 简浮辞/
+│       ├── 见真章/        ← 资源最丰富（含模板、范例、参考框架）
+│       ├── 揽风云/
+│       ├── 理脉络/
+│       ├── 纳百川/
+│       ├── 纳灵光/
+│       ├── 破虚妄/
+│       ├── 网络工具/      ← 含 monitor.js 连通性检测脚本
+│       └── 知乎/
+└── deepseek-harness-skill/     ← DeepSeek Harness 技能（建设中）
 ```
 
 ---
