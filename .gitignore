@@ -2,3 +2,9 @@ __pycache__/
 *.pyc
 cookie.txt
 .env
+
+# 运行时/本地产物（禁止入库，含登录态与采集数据）
+.venv/
+browser_data/
+data/_login_probe/
+*.log

@@ -69,6 +69,17 @@ def run_script(name, *args):
                           env=env)
 
 
+def injected_content(html):
+    """截取 build_report 注入 CONTENT_START/END 之间的正文片段。
+
+    模板自带 CSS 与开发注释里含组件类名/说明文字（如"角色小词典"/dualtrack），
+    对整份 html 做子串断言必然误报；只对注入片段断言才能反映"组件是否真的渲染"。
+    """
+    start = html.index("<!-- CONTENT_START -->") + len("<!-- CONTENT_START -->")
+    end = html.index("<!-- CONTENT_END -->", start)
+    return html[start:end]
+
+
 class TestNormalize(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="bbd_test_")
@@ -158,6 +169,11 @@ class TestOpinion(unittest.TestCase):
                                   "质疑程序与分摊": 1, "无关/其他": 1})
         # 时间轴
         self.assertEqual(data["timeline"], {"2025-06-01": 2, "2025-06-02": 2})
+        # 焦点转移：日期 × 立场（P1-6 新增输出键）
+        self.assertEqual(data["stance_timeline"], {
+            "2025-06-01": {"支持加装": 1, "一楼住户反对": 1},
+            "2025-06-02": {"质疑程序与分摊": 1, "无关/其他": 1},
+        })
 
     def test_missing_stances_exits_nonzero(self):
         """config 默认无词典时，不带 --stances 必须报错退出（不静默全归"无关/其他"）。"""
@@ -205,6 +221,47 @@ class TestBuildReport(unittest.TestCase):
         self.assertIn("<strong>主流立场</strong>", html)
         self.assertNotIn("viewpoint.md</p>", html)
         self.assertIn("<blockquote>", html)
+        # P1 组件（立场条形 / 来源小结 / 覆盖矩阵；无 stance_timeline 与 conflicts 时不渲染对应块）
+        self.assertIn('<div class="bars"', html)
+        self.assertIn("bar-fill", html)
+        self.assertIn('class="stat-line"', html)
+        self.assertIn('table class="matrix"', html)
+        self.assertNotIn('class="stacks"', html)
+        self.assertNotIn('class="conflict"', html)
+
+    def test_p2_optional_blocks(self):
+        """P2：无 --actors/--track 不渲染；有则渲染（角色词典 / 双轨时间轴）。"""
+        # 无输入 → 两组件均不出现
+        out1 = os.path.join(self.tmp, "report_no_p2.html")
+        r1 = run_script("build_report.py", "--event", "事件X", "--facts", self.facts,
+                        "--opinion", self.opinion, "--normalized", self.norm,
+                        "--viewpoint", self.vp, "--out", out1)
+        self.assertEqual(r1.returncode, 0, r1.stderr)
+        h1 = injected_content(open(out1, encoding="utf-8").read())
+        self.assertNotIn("角色小词典", h1)
+        self.assertNotIn("dualtrack", h1)
+        # 有输入 → 渲染
+        act = os.path.join(self.tmp, "actors.json")
+        with open(act, "w", encoding="utf-8") as f:
+            json.dump([{"name": "A方", "side": "甲", "type": "官方", "credibility": "▲官方",
+                        "stance": "坚持 X", "quotes": "q1\nq2", "ref": "[1]"}], f, ensure_ascii=False)
+        trk = os.path.join(self.tmp, "track.json")
+        with open(trk, "w", encoding="utf-8") as f:
+            json.dump({"rows": [
+                {"day": "2025-06-01", "lane": "claim", "type": "statement", "text": "说法甲"},
+                {"day": "2025-06-02", "lane": "verify", "type": "refute", "text": "证伪", "ref": "[1]"}]},
+                f, ensure_ascii=False)
+        out2 = os.path.join(self.tmp, "report_p2.html")
+        r2 = run_script("build_report.py", "--event", "事件X", "--facts", self.facts,
+                        "--opinion", self.opinion, "--normalized", self.norm,
+                        "--viewpoint", self.vp, "--actors", act, "--track", trk, "--out", out2)
+        self.assertEqual(r2.returncode, 0, r2.stderr)
+        h2 = injected_content(open(out2, encoding="utf-8").read())
+        self.assertIn("角色小词典", h2)
+        self.assertIn("A方", h2)
+        self.assertIn("双轨时间轴", h2)
+        self.assertIn("cell-verify", h2)
+        self.assertIn("mark-caution", h2)  # refute → ✗证伪 徽章
 
 
 class TestUtils(unittest.TestCase):
@@ -249,6 +306,42 @@ class TestUtils(unittest.TestCase):
         self.assertIn("<strong>粗体</strong>", h)
         self.assertIn('<a href="https://x.com"', h)
         self.assertIn("<code>code</code>", h)
+
+    def test_md_to_html_list_then_quote_well_nested(self):
+        """回归：列表后紧跟引用（无空行）时，</ul> 必须先于 <blockquote> 闭合。"""
+        sys.path.insert(0, SCRIPTS)
+        import build_report
+        h = build_report.md_to_html("- a\n- b\n> q")
+        self.assertLess(h.index("</ul>"), h.index("<blockquote>"))
+        self.assertTrue(h.endswith("</blockquote>"))
+        self.assertNotIn("<li>", h[h.index("<blockquote>"):])
+
+    def test_md_to_html_quote_then_list_well_nested(self):
+        """回归：引用后紧跟列表（无空行）时，</blockquote> 必须先于 <ul> 闭合。"""
+        sys.path.insert(0, SCRIPTS)
+        import build_report
+        h = build_report.md_to_html("> q\n- a\n- b")
+        self.assertLess(h.index("</blockquote>"), h.index("<ul>"))
+        self.assertTrue(h.endswith("</ul>"))
+        self.assertNotIn("<blockquote>", h[h.index("<ul>"):])
+
+
+class TestOpinionNegation(unittest.TestCase):
+    """P1-4：否定修饰防呆标记（疑似反讽/否定仅标记提示，不自动改判立场）。"""
+
+    def test_negated_keyword_flagged(self):
+        sys.path.insert(0, SCRIPTS)
+        import opinion
+        st = {"支持方": ["支持加装"]}
+        label, _matched, negated = opinion.classify("我不支持加装电梯", st)
+        self.assertEqual(label, "支持方")          # 命中"支持加装"仍归该立场
+        self.assertEqual(negated, ["支持加装"])   # 但被"不"紧邻修饰 → 打防呆标记
+        label, _matched, negated = opinion.classify("我支持加装电梯", st)
+        self.assertEqual(negated, [])             # 无否定修饰 → 不标记
+        label, _matched, negated = opinion.classify("毫不支持加装的业主占多数", st)
+        self.assertEqual(negated, ["支持加装"])   # "毫不"（毫+不）同样触发
+        label, _matched, negated = opinion.classify("邻居都说反对加装，我没意见", {"反对方": ["反对加装"]})
+        self.assertEqual(negated, [])             # 仅命中词紧邻前置被否定才标记，不误伤
 
 
 class TestSelftestOffline(unittest.TestCase):

@@ -39,7 +39,12 @@ except Exception:
 
 
 def verify_one(claim):
-    rec = {"claim": claim, "verdict": "待核查", "reason": "", "evidence": [], "type": "general"}
+    # 终裁溯源字段：check.py 只做初查、不产终裁；verdict 与 verdict_source/
+    # verified_by/verified_at 由 LLM 或人工回填（verdict_source ∈ llm_websearch /
+    # china_sources+llm / manual），保证"事实还原"可复现、可追溯。
+    rec = {"claim": claim, "verdict": "待核查", "verdict_source": "pending_llm",
+           "verified_by": "", "verified_at": "",
+           "reason": "", "evidence": [], "type": "general"}
     if not HAS_CHINA:
         rec["reason"] = "china_sources 不可用（po-xu-wang skill 未安装或路径不可达），待 LLM 多源核查"
         return rec
@@ -79,7 +84,9 @@ def main():
     if args.claims:
         claims += [c.strip() for c in args.claims.split(",") if c.strip()]
 
-    facts = {"event": args.event, "claims": [], "meta": {"china_sources": HAS_CHINA}}
+    facts = {"event": args.event, "claims": [], "meta": {
+        "china_sources": HAS_CHINA,
+        "note": "verdict 终裁与 verdict_source/verified_by/verified_at 由 LLM 或人工回填（llm_websearch / china_sources+llm / manual）；check.py 只做初查，不产终裁"}}
     if not claims:
         print("[check] 警告：未提供任何断言（--claims 或 --file 为空），facts.json 将不含核查记录")
     for c in claims:

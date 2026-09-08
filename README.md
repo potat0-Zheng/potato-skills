@@ -1,7 +1,7 @@
 # 🥔 Potato Skills
 
 > 土豆先生的 AI 技能工具箱
-> 仓库分为 `claude-code-skill/`（Claude Code 技能，共 11 个）与 `deepseek-harness-skill/`（DeepSeek Harness 技能，共 14 个，含同名技能的 dsh 适配版）。
+> 仓库分为 `claude-code-skill/`（Claude Code 技能，共 11 个）与 `deepseek-harness-skill/`（DeepSeek Harness 技能，共 15 个，含同名技能的 dsh 适配版）。
 
 ---
 
@@ -35,6 +35,7 @@
 | 百宝袋（bai-bao-dai） | 信息聚合 | 热点事件多方信息汇总与视点综合分析——微博/小红书/知乎三平台采集流水线 |
 | 问候语（greeting） | 小工具 | 根据当前时间自动生成对应时段的问候语 |
 | 微信读书（Tencent-WeChatReading） | 阅读助手 | 搜索书籍、管理书架、查看笔记划线、浏览书评、阅读统计、发现推荐好书 |
+| 三合一（san-he-yi） | 联合入口 | 揽风云×破虚妄×百宝袋三技能联合报告入口——依工作流依序编排，产出「多方信息汇总+事实核查+舆论立场」综合报告 |
 
 ---
 
@@ -145,7 +146,8 @@ potato-skills/
         ├── zhihu/              ← 知乎的 dsh 适配版
         ├── bai-bao-dai/        ← 百宝袋（新增）
         ├── greeting/           ← 问候语（新增）
-        └── Tencent-WeChatReading/  ← 微信读书（新增）
+        ├── Tencent-WeChatReading/  ← 微信读书（新增）
+        └── san-he-yi/          ← 三合一（新增，三技能联合入口）
 ```
 
 ---

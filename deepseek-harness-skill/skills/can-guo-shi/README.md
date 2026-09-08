@@ -18,3 +18,9 @@
   - `tests/test_query_flk.py` + fixture — 8 项离线测试全绿（共 20 项：gov 12 + flk 8）
   - `references/policy-sources.md` 新增源二契约；真实调用复核通过：检索"行政处罚法" `--sxx 3` 仅返回现行有效版、detail 返回 ossFile 全文路径
   - SKILL.md 阶段 2/搜索策略/注意事项补充法律类直查与时效字段用法（法律位阶走 flk、文件类走国务院库的两库分工）
+- **2026-09-06** — 需求驱动重构（任务声明 + 脉络追踪三件套）：
+  - 依据需求端分析（`workflow-design/参国是调整-需求端分析.md`）与实施方案（`workflow-design/参国是调整-实施方案.md`），SKILL.md 从"产物模式导向"升级为"需求任务声明导向"
+  - 新增「任务声明」节：5 问入口 + `--need` 映射（scan/timeline/compile/brief/insight/track/profile/compare/verify）；参数表新增 `--need/--angles/--persist/--no-persist`
+  - policy-registry 从"规划中"落地：schema（文号去重键 + 三元组兜底、时效状态、关联政策）、`scripts/policy_registry.py`（纯标准库 add/list/stats，原子写 + coverage_log 回写），并已用临时目录实测去重/过滤/统计通过
+  - 新增「政策脉络追踪」章节（registry · profile · compare）；输出规范补 模式四档案 / 模式五对比 / verify 核验卡；insight 加视角选择引导（--angles，利益结构为涉分配政策默认必含视角）
+  - HTML 专属 CSS 增量补 `.eff-badge`（时效徽章）/`.profile-meta`/`.life-bar`/`.rel-table`，图例补时效徽章说明；选择指南补 track/profile/compare/verify 示例

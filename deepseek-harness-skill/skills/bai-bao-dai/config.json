@@ -35,6 +35,19 @@
   },
   "stance_keywords": {},
   "stance_note": "立场词典必须按事件定制：采集后由 LLM 依据实际观点分歧构造 {立场: [关键词,...]}，经 opinion.py --stances <stances.json> 传入（'无关/其他' 兜底由脚本自动补）。默认留空；为空时 opinion.py 将报错退出，不做静默错误归类。",
+  "policy_tools": {
+    "enabled": true,
+    "modules_dir": "scripts/policy",
+    "note": "政策类积木模块：每模块可单独 CLI 调用并输出 JSON，也可被其他模块 import 或由 collect/normalize/build_report 拼入流水线（模块化设计）。",
+    "modules": {
+      "query_gov": {"file": "query_gov.py", "type": "official-query", "purpose": "国务院政策文件库直查", "needs_network": true},
+      "query_flk": {"file": "query_flk.py", "type": "official-query", "purpose": "国家法律法规数据库检索/时效核验", "needs_network": true},
+      "docnumber": {"file": "docnumber.py", "type": "parse", "purpose": "文号批量解析", "deps": []},
+      "pdf_parse": {"file": "pdf_parse.py", "type": "parse", "purpose": "政务PDF文本/表格提取", "deps": ["pdfplumber", "camelot-py[base]"], "install_hint": "pip install pdfplumber \"camelot-py[base]\""},
+      "ocr_parse": {"file": "ocr_parse.py", "type": "parse", "purpose": "扫描件OCR（PP-StructureV3）", "deps": ["paddlepaddle", "paddleocr"], "install_hint": "pip install paddlepaddle paddleocr"},
+      "policy_selftest": {"file": "policy_selftest.py", "type": "selfcheck", "purpose": "离线自检（无需网络）"}
+    }
+  },
   "probe": {
     "zhihu_question": ""
   }

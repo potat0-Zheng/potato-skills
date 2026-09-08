@@ -9,6 +9,14 @@
 3. 默认目录：用户指定 → 无指定则当前工作区。
 4. 引用渲染：`<a href="#ref1" class="ref">[1]</a>` + 索引锚点 `<tr id="ref1">`。
 5. 图像嵌入：调用 `collect_images.py` 一步完成。脚本自动提取每张图片的 alt 文本、DOM 位置（正文/侧栏）、上下文文本，按综合得分排序。
+6. 组件速查（模板 `CONTENT_START` 注释处亦有完整清单）：报告头部需要"一眼看规模/可信度"的大数字卡时用 `.kpis` + `.kpi-card`（内层 `.kpi-num` 大数字可含 `<span>` 单位、`.kpi-lab` 标签、`.kpi-sub` 说明）；其余组件（表格/引用锚点/确定性标记/时间线/立场行/卡片/图例/图像卡）类名均以模板注释为准。
+7. **自检（交付前必跑，0 error 才可交付）**：
+   ```powershell
+   python "~/.dsh/report-theme/check_report.py" --strict "<输出.html>"
+   ```
+   装配/渲染/自检规范见 `~/.dsh/report-theme/CONTRACT.md`。要点：`CONTENT_START/END` 全文各只能出现一次（不得把模板注释残留带进成品）；md 章节须先经 `md_render.md_to_html()` 转成真 HTML（表格 = GFM 管道表 → `<table>`，禁止 `<p>|` 残留；渲染器会自动剥离标题手写序号前缀「一、/1.」）；来源锚点行要带 `class="source-A/B/C"`。
+
+   直写 HTML 时新增组件（v0.2.9/0.2.10/0.2.12，类名与模板注释一致）：事件摘要 `.abstract`（两段式）、竖式时间轴 `.tl`、裁决徽章 `.v`/`.vpills`、断言卡 `.claims/.claim/.claim-title`、左侧常驻目录栏 `.bnav`（v0.2.12：透明底、常展开；含 `.bnav` 时内容自动让位、≤880px 与打印自动隐藏，内联 JS 仅滚动高亮 `.bnav-item.active`，骨架可直接复制 build_report._bnav_html() 的 aside+script）；v0.2.13 另增：图表双栏 `.chart-split`、环形图 `.donut`、趋势线 `.trend`、立场卡组 `.scards/.ssteps`、表格内高赞条目 `.quote-list`、视点综合信息条 `.viewpoint-meta/.viewpoint-snap`、长表滚动容器 `.table-scroll`、引用悬停气泡 `.refpop`；折叠渐缓弹出与引用气泡为装配端 JS（可复制 build_report._fold_js()/_refpop_js()，无 JS 时回退原生瞬开/纯跳转）。自检会提示：断言卡缺 `.claim-title`（W9）、缺摘要（W10）、附录跳级 h4（W11）。
 
 ## collect_images.py 用法
 
