@@ -111,6 +111,16 @@ curl -o ~/.dsh/skills/{技能目录名}/SKILL.md --create-dirs \
   https://raw.githubusercontent.com/potat0-Zheng/potato-skills/master/deepseek-harness-skill/skills/{技能目录名}/SKILL.md
 ```
 
+#### 附带：报告皮肤 report-theme/（报告家族共享组件）
+
+百宝袋/揽风云 的 HTML 报告皮肤与三合一联合任务依赖 `report-theme/`——含单一事实源主模板（`report_template.html`）、分发脚本（`sync_theme.py`）、联合/装配契约（`CONTRACT-joint.md`/`CONTRACT.md`）与交付门禁（`check_report.py`）。安装（三合一联合任务必需）：
+
+```bash
+cp -r deepseek-harness-skill/report-theme ~/.dsh/report-theme
+```
+
+改皮肤流程：编辑 `~/.dsh/report-theme/report_template.html`（bump `theme-v`）→ `python ~/.dsh/report-theme/sync_theme.py` 分发到各技能本地副本；`sync_theme.py --check` 校验防漂移。
+
 ---
 
 ## 目录结构
@@ -132,7 +142,7 @@ potato-skills/
 │       ├── 网络工具/      ← 含 monitor.js 连通性检测脚本
 │       └── 知乎/
 └── deepseek-harness-skill/     ← DeepSeek Harness 技能
-    └── skills/
+    ├── skills/
         ├── can-guo-shi/        ← 参国是的 dsh 适配版
         ├── cha-ren-shi/        ← 察人事的 dsh 适配版
         ├── jian-fu-ci/         ← 简浮辞的 dsh 适配版
@@ -148,6 +158,7 @@ potato-skills/
         ├── greeting/           ← 问候语（新增）
         ├── Tencent-WeChatReading/  ← 微信读书（新增）
         └── san-he-yi/          ← 三合一（新增，三技能联合入口）
+    └── report-theme/           ← 报告皮肤主控（主模板+分发+契约+门禁）
 ```
 
 ---
