@@ -4,9 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><!-- TITLE --></title>
-<!-- theme-v: 0.2.13 -->
+<!-- theme-v: 0.2.16 -->
 <!-- 本文件由 sync_theme.py 从 ~/.dsh/report-theme/ 同步分发。请勿手工修改各 skill 内的副本；
      修改皮肤请改主模板 report-theme/report_template.html，然后运行 report-theme/sync_theme.py。 -->
+<!-- v0.2.16 摘要标签化（ch1 事件摘要块）：.abstract 由两段式散文改为标签化清单 dl（dt 标签列 + dd 内容列；
+     推荐标签序：一句话结论/事件定性/事实核查/平台采样/舆论主形态/少数派/事件跨度；≤640px 堆叠单列）；
+     旧 .abs-label/.abs-txt 两段式样式保留兼容（生成器 --abstract 仍输出两段式 md 段落） -->
+<!-- v0.2.15 根治右空：正文段落移除独立 max-width（v0.2.14 曾以 56em≈896px 限宽，仍窄于
+     .wrap 1120px 容器，段落右缘只到 ~77% 造成右侧空白；现段落随容器同宽满排） -->
 
 <style>
   /* ═══════════════════ 设计令牌 · Editorial 风格（基于 Raleighawesome/html-design-skill，Apache 兼容） ═══════════════════ */
@@ -104,13 +109,16 @@
   .chapter-intro { max-width: 700px; margin: 0 0 1.2em; color: var(--gray-700); font-size: 14.5px; }
 
   /* ═══════════════════ 正文排版（中文友好） ═══════════════════ */
-  p { max-width: 72ch; }
+  /* v0.2.15 根治右空：正文段落不再单独限宽（此前 72ch→56em 仍窄于 .wrap 1120px，
+     导致段落右缘远短于标题/表格，右侧空出大块）。段落行宽跟随 .wrap 容器统一居中。 */
+  p { max-width: none; }
   p, li { margin: 0.7em 0; }
   ol, ul { margin: 0.6em 0; padding-left: 1.6em; }
   blockquote { border-left: 3px solid var(--gray-200); margin: 0.8em 0; padding: 0.3em 0.9em; background: var(--paper); color: var(--gray-700); font-size: 0.95em; }
   code { background: var(--gray-50); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.9em; font-family: var(--mono); }
   .subtitle { color: var(--gray-500); font-size: 0.95em; }
-  .caption { font-family: var(--mono); font-size: 11.5px; line-height: 1.68; color: var(--gray-500); margin: 12px 0 0; max-width: 78ch; }
+  /* 注释性文字（图注/来源/时间线说明）与正文同宽或略窄均可；跟随 .wrap 不再人为收窄 */
+  .caption { font-family: var(--mono); font-size: 11.5px; line-height: 1.68; color: var(--gray-500); margin: 12px 0 0; }
 
   /* ═══════════════════ 结论速览卡（meta-box，百宝袋程序化输出） ═══════════════════ */
   .meta-box { margin: 1.4em 0; padding: 20px 24px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); background: var(--paper); font-size: 0.95em; }
@@ -355,7 +363,9 @@
     .section-intro, .grid, .note, .report-list { margin-left: 0; }
     .report-row, .stance-row { grid-template-columns: 1fr; gap: 6px; }
     .stance-row .label .mark { display: inline-block; margin: 0 0 0 6px; }
-    .meta-box dl { grid-template-columns: 1fr; gap: 2px 0; }
+    .meta-box dl, .abstract dl { grid-template-columns: 1fr; gap: 2px 0; }
+    .abstract dt { margin-top: 1em; }
+    .abstract dt:first-child { margin-top: 0; }
   }
 
   /* ═══════════════════ 无障碍与打印 ═══════════════════ */
@@ -414,7 +424,7 @@
   .tl-dot.tg-official{background:#b0573b}.tl-dot.tg-media{background:#141413}.tl-dot.tg-view{background:#8a6512}
   .tl-dot.tg-bg{background:#6f6e68}.tl-dot.tg-quiet{background:#8a8a84}.tl-dot.tg-check{background:#66794f}
   .tl-body strong{display:block;font-family:var(--serif);font-size:16px;font-weight:600;color:var(--slate);margin-bottom:2px;line-height:1.35}
-  .tl-body p{margin:0;color:var(--gray-700);font-size:13.5px;line-height:1.62;max-width:72ch}
+  .tl-body p{margin:0;color:var(--gray-700);font-size:13.5px;line-height:1.62;max-width:70em}
   .tl-tag{display:inline-block;margin-right:6px;padding:1px 8px;border-radius:5px;font-family:var(--mono);font-size:10.5px;vertical-align:1.5px}
   .tl-tag.tg-official{background:#f6e9dd;color:#a44a2e}.tl-tag.tg-media{background:#ece8de;color:#3d3d3a}
   .tl-tag.tg-view{background:#f3ead9;color:#8a6512}.tl-tag.tg-bg{background:#f0eee6;color:#6f6e68}
@@ -447,8 +457,15 @@
   .claim details.fold > *:not(summary){padding:2px 16px 12px}
   @media(max-width:640px){.claim-row{grid-template-columns:26px 1fr}.claim .v{grid-column:2}}
 
-  /* ---- 事件摘要（ch1，模型生成两段式）：.abstract（.abs-label + .abs-txt×2）---- */
+  /* ---- 事件摘要（ch1，模型生成）：.abstract 标签化清单（v0.2.16：dl > dt 标签 + dd 内容，两列布局）；
+        旧两段式 .abs-label + .abs-txt 样式保留兼容（生成器 --abstract 仍走该路径） ---- */
   .abstract{margin:1.2em 0 1.4em;padding:18px 22px 16px;border:1.5px solid var(--gray-200);border-left:4px solid var(--clay);border-radius:var(--radius);background:var(--paper);max-width:none;width:100%}
+  .abstract dl{display:grid;grid-template-columns:max-content 1fr;gap:11px 24px;margin:0}
+  .abstract dt{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--gray-500);padding-top:3px;white-space:nowrap}
+  .abstract dd{margin:0;min-width:0;font-family:var(--serif);font-size:15.5px;line-height:1.85;color:var(--slate);text-align:justify;max-width:none}
+  .abstract dd p{margin:0 0 .45em}
+  .abstract dd p:last-child{margin-bottom:0}
+  .abstract .abs-foot{margin:.9em 0 0;font-family:var(--mono);font-size:11px;letter-spacing:.02em;color:var(--gray-500)}
   .abstract .abs-label{display:block;font-family:var(--mono);font-size:11.5px;letter-spacing:.22em;color:var(--gray-500);margin-bottom:10px}
   .abstract .abs-label::before{content:"";display:inline-block;width:22px;height:2px;background:var(--clay);vertical-align:middle;margin-right:9px}
   .abstract .abs-txt{margin:0 0 .55em;font-family:var(--serif);font-size:16px;line-height:1.95;color:var(--slate);text-align:justify;max-width:none}
@@ -489,7 +506,7 @@
      - 竖式里程碑时间轴（v0.2.9，ch2 可选）：.tl > .tl-item，内 .tl-date（日期 + .tl-cnt 采集量胶囊）+ .tl-dot.tg-* + .tl-body（.tl-tag.tg-* 类型标签 + 标题 + 说明）；类型 tg-official/media/view/bg/quiet/check。数据约定：事件节点 + 当日采集量。
      - 裁决徽章族（v0.2.9）：.v.v-true（真实，砖红系 v0.2.11 起）/.v.v-part（部分真实·观点性，金）——与证据徽章 .mark-*（▲官方/●多源/△单源）分族，勿混用。
      - 断言卡（v0.2.9，ch3 程序化）：.claims > .claim：.claim-row（.claim-id + .claim-txt 断言原文 + .v 裁决徽章）+ details.fold 收纳说明与证据源；.claim-title 为模型摘要行（非标题元素，不进编号）；字段 facts.json claims[].short_title（≤24 字、只压缩原文、保留限定词）。
-     - 事件摘要（v0.2.9，ch1，模型生成）：.abstract 两段式——段一：事件描述→最新进展→舆论反应；段二：真实性核查→结构化内容（裁决分布/口径提示/△标注）；末尾注明“模型生成·以各章为准”。
+     - 事件摘要（v0.2.16 标签化，ch1，模型生成）：<div class="abstract"><dl><dt>一句话结论</dt><dd>…全篇总括…</dd><dt>事件定性</dt><dd>…</dd><dt>事实核查</dt><dd>N 条断言 → 真实/部分真实/证据不足（详见第三章）</dd><dt>平台采样</dt><dd>各平台样本量与补采说明</dd><dt>舆论主形态</dt><dd>按条数/按赞同加权的派别占比</dd><dt>少数派</dt><dd>低占比高质派别/玩梗反讽等</dd><dt>事件跨度</dt><dd>起→止日期与节点</dd></dl><p class="abs-foot">模型生成·以各章为准</p></div>——dt 为标签列、dd 为内容列（两列网格，≤640px 堆叠）；标签按报告类型可增减，dd 长文可再分 p；旧两段式（.abs-label + .abs-txt×2）仍兼容渲染（生成器 --abstract 默认输出该式）。
       - 事实核查压缩视图（v0.2.10，ch4 程序化）：分工说明 meta-box + 分布胶囊 .vpills > .vpill（.v-true/.v-part）+ 分组速览只引 #N + 口径冲突表 table.conflict（兼容 conflicts {a,b,note} 与 {issue,verdict,note} 两种 schema）+ 核查方法；逐条全文归第三章，不再复述。
       - 生成器参数（v0.2.10）：--abstract（事件摘要两段式 md）· --timeline-milestones（[{date,type,tag,title,text,count}]，type∈official/media/view/bg/quiet/check）· --nav-drawer/--no-nav-drawer（默认开启左侧常驻目录栏并自动移除顶部 toc）。
       - 来源分级（v0.2.10）：ref 行 class="source-A/B/C" 由生成端按 sources[].grade 输出；自动采集帖默认标 C（UGC）。

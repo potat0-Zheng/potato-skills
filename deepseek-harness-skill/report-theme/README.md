@@ -83,7 +83,7 @@ python report-theme/sync_theme.py --check  # 只检查一致性（防漂移）
 | `.tl` / `.tl-item` / `.tl-dot.tg-*` / `.tl-tag.tg-*`（v0.2.9） | 竖式里程碑时间轴（ch2：事件节点 + 当日采集量 `.tl-cnt`，纯 CSS） |
 | `.v.v-true` / `.v.v-part`（v0.2.9） | 裁决徽章族（真实=砖红系、部分真实·观点性=金，v0.2.11 起；与 `.mark-*` 证据徽章分族） |
 | `.claims` / `.claim` / `.claim-title`（v0.2.9） | 断言卡（ch3：编号 + 断言原文 + 裁决徽章 + fold 说明；`.claim-title` 模型摘要行，非标题元素） |
-| `.abstract`（v0.2.9） | 事件摘要块（ch1，模型生成两段式：段一事件→进展→舆论；段二真实性→结构化内容） |
+| `.abstract`（v0.2.9→v0.2.16） | 事件摘要块（ch1，模型生成）：标签化清单 `dl`（`dt` 标签列 + `dd` 内容列；推荐标签序：一句话结论/事件定性/事实核查/平台采样/舆论主形态/少数派/事件跨度，≤640px 堆叠）；旧两段式 `.abs-label+.abs-txt` 兼容 |
 | 表格 th/td（v0.2.13） | 全局文字水平+垂直居中；md 管道表 `:---` 对齐以行内样式优先 |
 | `.chart-split` / `.donut` / `.donut-legend` / `.trend`（v0.2.13） | 图表双栏（两列、上下居中、≤880 单列）+ 环形图（conic-gradient 百分比直转 deg、mask 掏洞成环，不支持回退实心饼）+ 静态 SVG 趋势折线（.trend-head/网格/折线 .s1-.s4/面积/圆点/图例；坐标由生成端按数据算） |
 | `.scards` / `.scard` / `.ssteps` / `.scard-note`（v0.2.13） | 立场卡组 + 论证链步骤带（自动数字圆点+箭头）；跨卡对齐：卡头两行、节点等高、引用区弹性、防呆齐底 |
@@ -96,7 +96,10 @@ python report-theme/sync_theme.py --check  # 只检查一致性（防漂移）
 
 ## 版本与演进
 
-- **v0.2.13（当前）**：可视化与交互批——① 表格 th/td 全局文字水平+垂直居中（md 表 `:---` 对齐内联样式优先可覆盖）；② 图表双栏 `.chart-split`（上下居中、≤880 单列）+ 环形图 `.donut/.donut-legend`（conic-gradient 分段 + mask 掏洞）+ 趋势折线 `.trend`（静态 SVG，坐标由生成端计算，皮肤只供样式）；③ 堆叠条补 `.stack-seg.s6` 与 `.stack-legend i.s1–s6` 图例色块（此前图例透明不可见）；④ 立场卡组 `.scards/.scard/.ssteps/.scard-note`（卡头两行/节点等高/引用区弹性/防呆齐底的跨卡对齐）；⑤ 表格内高赞条目 `.quote-list/.quote-item`；⑥ 视点综合信息条 `.viewpoint-meta/.viewpoint-snap`（h3:has 增强不动自动编号）；⑦ 长表滚动容器 `.table-scroll`（固定高度 min(58vh,540px)+吸顶表头，打印展开全文）；⑧ 引用悬停气泡 `.refpop`（装配端 refpop JS 读索引行自动浮出，无 JS 回退跳转）；⑨ 折叠渐缓弹出改 WAAPI 命令式动画（皮肤不再写 animation 规则——CSS 动画在 details 隐藏子树不重放，装配端 `_fold_js()` 每次 open 现开新动画）；⑩ 左侧目录栏滚动高亮坐标修复（rect.top 与阈值同用视口坐标）。配套：build_report `_bnav_html()` spy 修复、新增 `_fold_js()/_refpop_js()` 注入、来源索引表自动套 `.table-scroll`；模板注释/导出细则同步。
+- **v0.2.16（当前）**：摘要标签化——ch1 事件摘要块 `.abstract` 由「两段式散文」改为「标签化清单」：`.abstract dl` 两列（`dt` 标签列等宽 mono + `dd` 内容列衬线正文，≤640px 堆叠单列、组间留白）；推荐标签序：一句话结论 → 事件定性 → 事实核查 → 平台采样 → 舆论主形态 → 少数派 → 事件跨度（标签按报告类型可增减，dd 长文可再分 p）；新增 `.abs-foot` 注脚（"模型生成·以各章为准"）。旧 `.abs-label/.abs-txt` 两段式样式保留兼容（生成器 `--abstract` 仍输出两段式 md 段落，未改）。
+- **v0.2.15**：根治右空——正文段落移除独立 `max-width`（不再 72ch/56em 限宽），行宽跟随 `.wrap` 容器满排，消除段落右缘与标题/表格不齐的右侧空白。
+- **v0.2.14**：正文段落试以 56em≈896px 限宽（已被 v0.2.15 取代）。
+- **v0.2.13**：可视化与交互批——① 表格 th/td 全局文字水平+垂直居中（md 表 `:---` 对齐内联样式优先可覆盖）；② 图表双栏 `.chart-split`（上下居中、≤880 单列）+ 环形图 `.donut/.donut-legend`（conic-gradient 分段 + mask 掏洞）+ 趋势折线 `.trend`（静态 SVG，坐标由生成端计算，皮肤只供样式）；③ 堆叠条补 `.stack-seg.s6` 与 `.stack-legend i.s1–s6` 图例色块（此前图例透明不可见）；④ 立场卡组 `.scards/.scard/.ssteps/.scard-note`（卡头两行/节点等高/引用区弹性/防呆齐底的跨卡对齐）；⑤ 表格内高赞条目 `.quote-list/.quote-item`；⑥ 视点综合信息条 `.viewpoint-meta/.viewpoint-snap`（h3:has 增强不动自动编号）；⑦ 长表滚动容器 `.table-scroll`（固定高度 min(58vh,540px)+吸顶表头，打印展开全文）；⑧ 引用悬停气泡 `.refpop`（装配端 refpop JS 读索引行自动浮出，无 JS 回退跳转）；⑨ 折叠渐缓弹出改 WAAPI 命令式动画（皮肤不再写 animation 规则——CSS 动画在 details 隐藏子树不重放，装配端 `_fold_js()` 每次 open 现开新动画）；⑩ 左侧目录栏滚动高亮坐标修复（rect.top 与阈值同用视口坐标）。配套：build_report `_bnav_html()` spy 修复、新增 `_fold_js()/_refpop_js()` 注入、来源索引表自动套 `.table-scroll`；模板注释/导出细则同步。
 - **v0.2.12**：目录栏改版——右侧毛玻璃抽屉（`.bnav-trigger`/`.bnav-overlay`/开关 JS）废弃，改为**左侧常驻目录栏**：固定左缘 240px、常展开、透明背景、右缘 1px 细线；`body:has(.bnav)` 为内容让位（.wrap 在剩余宽度内居中）；条目删 `data-full` 悬停 Pill（改原生 title）、去 `.x` 关闭钮与遮罩；JS 只留滚动高亮 `.bnav-item.active`（当前章指示）；≤880px 与打印自动隐藏。配套：build_report `_bnav_html()` 重写、模板注释/CONTRACT/导出细则同步。触发：目录常驻左侧 + 当前章指示，便于长报告章节定位。
 - **v0.2.11**：暖调收敛（经真实报告验收）——v0.2.9/0.2.10 新增组件的大面积多色相（绿/蓝/紫）收敛回旧版纸暖观感，**组件结构不变、仅色值调整**：时间轴 `.tl-dot/.tl-tag.tg-*`（official=砖红 / media=墨 / view=金 / bg=灰 / quiet=灰 / check=橄榄）、来源分级 `.source-A` 底改暖纸 `#e9e0cc`、覆盖矩阵 `cell-ok` 改暖纸底砖红字、裁决徽章 `.v.v-true/.vpill.v-true`（真实=砖红系 `#f6e9dd/#a44a2e`，部分真实=金不变）、堆叠段 `.stack-seg.s1-5`（红/金/橄榄/墨/灰）。行内 `.mark-*` 证据徽章语义色（▲绿/●蓝/△金）保留。触发：多色组件致整页主色偏离旧版纸暖砖红观感时。
 - **v0.2.10**：生成器批写回模板——补第四章分布胶囊 `.vpills/.vpill` 与 `table.conflict` 列宽；模板注释固化：ch4 裁决压缩视图（分工说明 + 分布胶囊 + 分组速览 + 冲突表兼容两种 schema）、生成器参数 `--abstract`/`--timeline-milestones`/`--nav-drawer`、来源分级默认 C、md 标题前缀自动剥离、单对 CONTENT 装配。配套 `build_report.py` 已实现同批功能（theads、断言卡、压缩核查、摘要、悬浮目录注入、时间轴、来源分级）。
