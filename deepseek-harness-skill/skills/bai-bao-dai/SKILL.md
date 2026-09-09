@@ -119,7 +119,7 @@ python "~/.dsh/report-theme/check_report.py" --strict "data/{event_id}/report.ht
 LLM 深度内容（`--viewpoint/--coverage/--abstract`）只写 md：md 渲染器支持 GFM 管道表格（自动转 `<table><thead><tbody>`）、加粗、列表、引用，并**自动剥离标题手写序号前缀（「一、/1.」）**；**禁止在 md 里手写 HTML 或让 `<p>| …` 管道行残留**（check E3 会拦截）。
 
 新增约定（v0.2.10）：
-- **事件摘要（`--abstract`）两段式**：段一 事件描述→最新进展→舆论反应；段二（另起一段）真实性核查→结构化内容（裁决分布/口径提示/△标注）；末尾注明“模型生成·以各章为准”。缺省不渲染。
+- **事件摘要（ch1，v0.2.16 标签化）**：`.abstract` 用标签化清单 `<dl>`（`dt` 标签列 + `dd` 内容列，≤640px 堆叠）：推荐序 一句话结论 → 事件定性 → 事实核查（N 条断言 → 真实/部分真实/证据不足，详见第四章）→ 平台采样 → 舆论主形态 → 少数派 → 事件跨度；标签按报告类型可增减，dd 长文可再分 p，末尾 `.abs-foot`「模型生成·以各章为准」。程序化装配仍可用 `--abstract` 两段式 md（段一 事件→进展→舆论；段二 真实性→结构提示，缺省不渲染），两种写法样式并存兼容。
 - **竖式时间轴（`--timeline-milestones`）**：`[{date,type,tag,title,text,count}]`，type∈official/media/view/bg/quiet/check；缺省回退“日期×记录数”简表。
 - **断言小标题**：`facts.json` 每条 claims 增加 `short_title`（≤24 字、只压缩原文、保留限定词），渲染为 ch3 断言卡标题；ch4 只做裁决压缩视图（分工说明 + 分布胶囊 + 分组速览 + 冲突表），**两章不再复述**。
 - **来源分级**：`sources[].grade`（A/B/C）输出 `class="source-A/B/C"`；自动采集帖默认 C。

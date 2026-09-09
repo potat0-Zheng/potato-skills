@@ -284,6 +284,28 @@ WebSearch 返回的结果摘要往往已包含可核查的关键事实——数�
 - 对于 `compile`：核心内容精简 + 来源列表
 - 对于 `timeline`：时间线精简 + 关键节点
 
+### 联合模式（三合一：产出 `facts.json` 供 build_report 装配）
+
+被 san-he-yi（三合一）编排为第 ③ 阶段时，核查结论不写 Word/HTML，而是把登记册裁决写入 `data/{event_id}/facts.json`（schema 对齐百宝袋 `build_report.py` 与 `CONTRACT-joint.md` §2/§3）：
+
+```json
+{
+  "claims": [
+    {
+      "id": "F1",
+      "claim": "断言原文（含引文与正文转述，逐条登记）",
+      "short_title": "≤24 字模型摘要（只压缩原文、保留限定词）",
+      "verdict": "真实 | 部分真实 | 失实 | 证据不足",
+      "evidence_level": "1|2|3|4（官方文件/本人账号原文 ＞ 权威媒体全文 ＞ 转载引文 ＞ 搜索摘要/标题层）",
+      "reason": "裁决说明",
+      "evidence": [{"source": "证据源描述（可多条，与来源索引对应）"}]
+    }
+  ]
+}
+```
+
+注意：断言原文字段名是 `claim`（不是 `text`）、裁决值内联在每条 `claims[].verdict`（不是独立 `verdicts` 数组）——`build_report.py` 直接读这些字段，编号按 claims 顺序（#1 起）。证据隔离与判定规则遵 `CONTRACT-joint.md`（第 4 章不得引用第 3 章转述作证据；证据等级与裁决词见其 §2/§3）。
+
 ---
 
 ### 导出 Word
