@@ -4,9 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><!-- TITLE --></title>
-<!-- theme-v: 0.2.16 -->
+<!-- theme-v: 0.2.17 -->
 <!-- 本文件由 sync_theme.py 从 ~/.dsh/report-theme/ 同步分发。请勿手工修改各 skill 内的副本；
      修改皮肤请改主模板 report-theme/report_template.html，然后运行 report-theme/sync_theme.py。 -->
+<!-- v0.2.17 摘要排版细节：dt 标签改正文同族衬线加粗（16px/600，同 .claim-title 类小标题）、
+     dd 内容改无衬线 16px 行高 1.72 与正文一致（取消两端对齐与衬线 15.5px），标题/内容基线自然对齐，字体协调。 -->
 <!-- v0.2.16 摘要标签化（ch1 事件摘要块）：.abstract 由两段式散文改为标签化清单 dl（dt 标签列 + dd 内容列；
      推荐标签序：一句话结论/事件定性/事实核查/平台采样/舆论主形态/少数派/事件跨度；≤640px 堆叠单列）；
      旧 .abs-label/.abs-txt 两段式样式保留兼容（生成器 --abstract 自动识别：结构化标签式 → dl 行；旧两段式 → 段落） -->
@@ -457,12 +459,12 @@
   .claim details.fold > *:not(summary){padding:2px 16px 12px}
   @media(max-width:640px){.claim-row{grid-template-columns:26px 1fr}.claim .v{grid-column:2}}
 
-  /* ---- 事件摘要（ch1，模型生成）：.abstract 标签化清单（v0.2.16：dl > dt 标签 + dd 内容，两列布局）；
+  /* ---- 事件摘要（ch1，模型生成）：.abstract 标签化清单（v0.2.16 dl dt/dd；v0.2.17 dt 衬线加粗同正文字号、dd 无衬线同正文）；
         旧两段式 .abs-label + .abs-txt 样式保留兼容（生成器 --abstract 自动识别结构式/两段式） ---- */
   .abstract{margin:1.2em 0 1.4em;padding:18px 22px 16px;border:1.5px solid var(--gray-200);border-left:4px solid var(--clay);border-radius:var(--radius);background:var(--paper);max-width:none;width:100%}
   .abstract dl{display:grid;grid-template-columns:max-content 1fr;gap:11px 24px;margin:0}
-  .abstract dt{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--gray-500);padding-top:3px;white-space:nowrap}
-  .abstract dd{margin:0;min-width:0;font-family:var(--serif);font-size:15.5px;line-height:1.85;color:var(--slate);text-align:justify;max-width:none}
+  .abstract dt{font-family:var(--serif);font-weight:600;font-size:16px;line-height:1.72;color:var(--slate);white-space:nowrap}
+  .abstract dd{margin:0;min-width:0;font-family:var(--sans);font-size:16px;line-height:1.72;color:var(--slate);max-width:none}
   .abstract dd p{margin:0 0 .45em}
   .abstract dd p:last-child{margin-bottom:0}
   .abstract .abs-foot{margin:.9em 0 0;font-family:var(--mono);font-size:11px;letter-spacing:.02em;color:var(--gray-500)}
@@ -506,7 +508,7 @@
      - 竖式里程碑时间轴（v0.2.9，ch2 可选）：.tl > .tl-item，内 .tl-date（日期 + .tl-cnt 采集量胶囊）+ .tl-dot.tg-* + .tl-body（.tl-tag.tg-* 类型标签 + 标题 + 说明）；类型 tg-official/media/view/bg/quiet/check。数据约定：事件节点 + 当日采集量。
      - 裁决徽章族（v0.2.9）：.v.v-true（真实，砖红系 v0.2.11 起）/.v.v-part（部分真实·观点性，金）——与证据徽章 .mark-*（▲官方/●多源/△单源）分族，勿混用。
      - 断言卡（v0.2.9，ch3 程序化）：.claims > .claim：.claim-row（.claim-id + .claim-txt 断言原文 + .v 裁决徽章）+ details.fold 收纳说明与证据源；.claim-title 为模型摘要行（非标题元素，不进编号）；字段 facts.json claims[].short_title（≤24 字、只压缩原文、保留限定词）。
-     - 事件摘要（v0.2.16 标签化，ch1，模型生成）：<div class="abstract"><dl><dt>一句话结论</dt><dd>…全篇总括…</dd><dt>事件定性</dt><dd>…</dd><dt>事实核查</dt><dd>N 条断言 → 真实/部分真实/证据不足（详见事实核查章）</dd><dt>平台采样</dt><dd>各平台样本量与补采说明</dd><dt>舆论主形态</dt><dd>按条数/按赞同加权的派别占比</dd><dt>少数派</dt><dd>低占比高质派别/玩梗反讽等</dd><dt>事件跨度</dt><dd>起→止日期与节点</dd></dl><p class="abs-foot">模型生成·以各章为准</p></div>——dt 为标签列、dd 为内容列（两列网格，≤640px 堆叠）；标签按报告类型可增减，dd 长文可再分 p；旧两段式（.abs-label + .abs-txt×2）仍兼容渲染（生成器 --abstract 自动识别：结构化标签式 → dl 行，旧两段式 → 段落）。
+     - 事件摘要（v0.2.16 标签化，ch1，模型生成）：<div class="abstract"><dl><dt>一句话结论</dt><dd>…全篇总括…</dd><dt>事件定性</dt><dd>…</dd><dt>事实核查</dt><dd>N 条断言 → 真实/部分真实/证据不足（详见事实核查章）</dd><dt>平台采样</dt><dd>各平台样本量与补采说明</dd><dt>舆论主形态</dt><dd>按条数/按赞同加权的派别占比</dd><dt>少数派</dt><dd>低占比高质派别/玩梗反讽等</dd><dt>事件跨度</dt><dd>起→止日期与节点</dd></dl><p class="abs-foot">模型生成·以各章为准</p></div>——dt 为标签列（衬线加粗、与正文同字号 16px）、dd 为内容列（无衬线与正文一致；两列网格，≤640px 堆叠）；标签按报告类型可增减，dd 长文可再分 p；旧两段式（.abs-label + .abs-txt×2）仍兼容渲染（生成器 --abstract 自动识别：结构化标签式 → dl 行，旧两段式 → 段落）。
       - 事实核查压缩视图（v0.2.10，ch4 程序化）：分工说明 meta-box + 分布胶囊 .vpills > .vpill（.v-true/.v-part）+ 分组速览只引 #N + 口径冲突表 table.conflict（兼容 conflicts {a,b,note} 与 {issue,verdict,note} 两种 schema）+ 核查方法；逐条全文归第三章，不再复述。
       - 生成器参数（v0.2.10）：--abstract（事件摘要两段式 md）· --timeline-milestones（[{date,type,tag,title,text,count}]，type∈official/media/view/bg/quiet/check）· --nav-drawer/--no-nav-drawer（默认开启左侧常驻目录栏并自动移除顶部 toc）。
       - 来源分级（v0.2.10）：ref 行 class="source-A/B/C" 由生成端按 sources[].grade 输出；自动采集帖默认标 C（UGC）。
