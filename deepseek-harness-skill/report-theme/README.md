@@ -96,7 +96,7 @@ python report-theme/sync_theme.py --check  # 只检查一致性（防漂移）
 
 ## 版本与演进
 
-- **v0.2.16（当前）**：摘要标签化——ch1 事件摘要块 `.abstract` 由「两段式散文」改为「标签化清单」：`.abstract dl` 两列（`dt` 标签列等宽 mono + `dd` 内容列衬线正文，≤640px 堆叠单列、组间留白）；推荐标签序：一句话结论 → 事件定性 → 事实核查 → 平台采样 → 舆论主形态 → 少数派 → 事件跨度（标签按报告类型可增减，dd 长文可再分 p）；新增 `.abs-foot` 注脚（"模型生成·以各章为准"）。旧 `.abs-label/.abs-txt` 两段式样式保留兼容（生成器 `--abstract` 仍输出两段式 md 段落，未改）。
+- **v0.2.16（当前）**：摘要标签化——ch1 事件摘要块 `.abstract` 由「两段式散文」改为「标签化清单」：`.abstract dl` 两列（`dt` 标签列等宽 mono + `dd` 内容列衬线正文，≤640px 堆叠单列、组间留白）；推荐标签序：一句话结论 → 事件定性 → 事实核查 → 平台采样 → 舆论主形态 → 少数派 → 事件跨度（标签按报告类型可增减，dd 长文可再分 p）；新增 `.abs-foot` 注脚（"模型生成·以各章为准"）。旧 `.abs-label/.abs-txt` 两段式样式保留兼容（生成器 `--abstract` 自动识别：结构化标签式 md → dl 行；旧两段式 → 段落）。
 - **v0.2.15**：根治右空——正文段落移除独立 `max-width`（不再 72ch/56em 限宽），行宽跟随 `.wrap` 容器满排，消除段落右缘与标题/表格不齐的右侧空白。
 - **v0.2.14**：正文段落试以 56em≈896px 限宽（已被 v0.2.15 取代）。
 - **v0.2.13**：可视化与交互批——① 表格 th/td 全局文字水平+垂直居中（md 表 `:---` 对齐内联样式优先可覆盖）；② 图表双栏 `.chart-split`（上下居中、≤880 单列）+ 环形图 `.donut/.donut-legend`（conic-gradient 分段 + mask 掏洞）+ 趋势折线 `.trend`（静态 SVG，坐标由生成端计算，皮肤只供样式）；③ 堆叠条补 `.stack-seg.s6` 与 `.stack-legend i.s1–s6` 图例色块（此前图例透明不可见）；④ 立场卡组 `.scards/.scard/.ssteps/.scard-note`（卡头两行/节点等高/引用区弹性/防呆齐底的跨卡对齐）；⑤ 表格内高赞条目 `.quote-list/.quote-item`；⑥ 视点综合信息条 `.viewpoint-meta/.viewpoint-snap`（h3:has 增强不动自动编号）；⑦ 长表滚动容器 `.table-scroll`（固定高度 min(58vh,540px)+吸顶表头，打印展开全文）；⑧ 引用悬停气泡 `.refpop`（装配端 refpop JS 读索引行自动浮出，无 JS 回退跳转）；⑨ 折叠渐缓弹出改 WAAPI 命令式动画（皮肤不再写 animation 规则——CSS 动画在 details 隐藏子树不重放，装配端 `_fold_js()` 每次 open 现开新动画）；⑩ 左侧目录栏滚动高亮坐标修复（rect.top 与阈值同用视口坐标）。配套：build_report `_bnav_html()` spy 修复、新增 `_fold_js()/_refpop_js()` 注入、来源索引表自动套 `.table-scroll`；模板注释/导出细则同步。

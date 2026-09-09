@@ -91,7 +91,7 @@ python "~/.dsh/report-theme/check_report.py" "data/{event_id}/report.html"
 ```
 LLM 深度内容（viewpoint/coverage/abstract）写作时只写 md，**表格用 GFM 管道语法**，由渲染器负责转真表格。新增数据字段与参数（v0.2.10）：
 - `facts.json claims[].short_title`：断言卡小标题（模型摘要，≤24 字、只压缩原文、保留限定词）；
-- `--abstract`：ch1 两段式摘要 md（空行分段：段一 事件→进展→舆论；段二 真实性→结构提示）；直接装配时 ch1 摘要可用 v0.2.16 标签化 `.abstract dl`（一句话结论/事件定性/事实核查/平台采样/舆论主形态/少数派/事件跨度，见模板注释）；
+- `--abstract`：ch1 摘要 md（自动识别：**结构化标签式**——标签单独成段写 `**一句话结论**` 等、后空行接内容 → `.abstract dl` 行；或旧两段式——空行分段：段一 事件→进展→舆论、段二 真实性→结构提示）；推荐标签序：一句话结论/事件定性/事实核查/平台采样/舆论主形态/少数派/事件跨度（见模板注释）；
 - `--timeline-milestones`：ch2 竖式时间轴 `[{date,type,tag,title,text,count}]`，type∈official/media/view/bg/quiet/check；缺省回退日期×条数表；
 - `sources[].grade`：ref 行分级 `source-A/B/C`；自动采集帖默认 C（UGC）；
 - `--nav-drawer/--no-nav-drawer`：默认注入左侧常驻目录栏（v0.2.12：透明底、常展开、滚动高亮当前章）并移除顶部 toc。

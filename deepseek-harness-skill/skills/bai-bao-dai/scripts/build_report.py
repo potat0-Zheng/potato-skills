@@ -31,6 +31,8 @@ TEMPLATE = os.path.join(SKILL_DIR, "templates", "report_template.html")
 
 PLATFORM_NAMES = {"zhihu": "知乎", "weibo": "微博", "xiaohongshu": "小红书", "unknown": "未知"}
 VERDICT_ORDER = ["真实", "部分真实", "失实", "证据不足", "待核查"]
+# v0.2.13 图表色环：与模板 .stack-seg.s1-.s6 / .trend .s1-.s4 / .donut 分段一致
+S_PALETTE = ["#b0573b", "#8a6512", "#66794f", "#3d3d3a", "#d1cfc5", "#87786a"]
 
 EV_LABELS = {1: "官方文件/本人账号原文", 2: "权威媒体全文", 3: "转载引文", 4: "搜索摘要/标题层"}
 
@@ -57,11 +59,26 @@ def load_json(path):
 
 
 def _inline(text):
-    """行内 markdown：加粗/斜体/链接/行内代码。text 需已 esc()。"""
+    """行内 markdown：加粗/斜体/链接/行内代码 + 引用编号 [N] → a.ref（v0.2.13）。
+    text 需已 esc()；标签内文本用哨兵保护，避免对 <a>/<code> 内容二次转换。"""
     text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
     text = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2" target="_blank" rel="noopener">\1</a>', text)
     text = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
     text = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", text)
+    # 引用编号 → 交叉引用（悬停 refpop 卡片）：保护 <a>/<code>/<strong>/<em> 内文本
+    holders = []
+
+    def _hold(m):
+        holders.append(m.group(0))
+        return "\x00REFHOLD%d\x00" % (len(holders) - 1)
+
+    text = re.sub(r"<a\b[^>]*>.*?</a>", _hold, text, flags=re.S)
+    text = re.sub(r"<code>.*?</code>", _hold, text, flags=re.S)
+    text = re.sub(r"<strong>.*?</strong>", _hold, text, flags=re.S)
+    text = re.sub(r"<em>.*?</em>", _hold, text, flags=re.S)
+    text = re.sub(r"\[(\d{1,3})\]", r'<a href="#ref\1" class="ref">[\1]</a>', text)
+    for i, h in enumerate(holders):
+        text = text.replace("\x00REFHOLD%d\x00" % i, h)
     return text
 
 
@@ -98,13 +115,40 @@ def _clip_text(s, n=56):
 
 
 def _abstract_html(text):
-    """事件摘要两段式（空行分段）：段一 事件→进展→舆论；段二 真实性→结构提示。"""
+    """事件摘要（v0.2.16）：自动识别两种 md 写法——
+    结构化标签式：每个标签单独成段写 `**一句话结论**` 等，其后的段落为该标签内容，
+      渲染为 .abstract dl（dt 标签 + dd 内容，见模板注释的推荐标签序）；
+    旧两段式：无标签段落（空行分段），渲染为 .abs-label + .abs-txt 段落（兼容保留）。"""
     t = (text or "").strip()
     if not t:
         return ""
     paras = [p.strip() for p in re.split(r"\n\s*\n", t) if p.strip()]
     if not paras:
         return ""
+    LABEL = re.compile(r"^\*\*(.+?)\*\*$")
+    # 结构化模式：段落恰好是 **标签** 视为 dt，其后段落为该标签内容
+    if any(LABEL.match(p) for p in paras):
+        inner = ["<dl>"]
+        cur_label = None
+        cur_body = []
+        def flush():
+            nonlocal cur_label, cur_body
+            if cur_label is not None:
+                body = "".join("<p>%s</p>" % _inline(esc(b)) for b in cur_body) if cur_body else ""
+                inner.append("<dt>%s</dt><dd>%s</dd>" % (esc(cur_label), body))
+            cur_label, cur_body = None, []
+        for p in paras:
+            m = LABEL.match(p)
+            if m:
+                flush()
+                cur_label = m.group(1).strip()
+            else:
+                cur_body.append(p)
+        flush()
+        inner.append("</dl>")
+        inner.append('<p class="abs-foot">本摘要由模型生成，仅作全文压缩；细节与结论以各章数据与来源为准。</p>')
+        return '<div class="abstract">' + "".join(inner) + "</div>"
+    # 旧两段式（兼容）
     inner = ['<span class="abs-label">摘要</span>']
     for p in paras:
         inner.append('<p class="abs-txt">%s</p>' % _inline(esc(p)))
@@ -485,6 +529,167 @@ def _default_intros(facts, opinion, sources, recs):
     return out
 
 
+def _stance_donut(dist):
+    """环形图 .donut + .donut-legend（v0.2.13）：由 stance_distribution 各立场占比生成。
+    返回 (html, ok)——数据不足 2 段时 ok=False，装配层回退纯条形布局。"""
+    rows = []
+    for d in dist or []:
+        pct = float(d.get("pct") or 0)
+        if pct > 0:
+            rows.append((str(d.get("stance", "")), pct, int(d.get("count") or 0)))
+    if len(rows) < 2:
+        return "", False
+    total = sum(p for _, p, _ in rows) or 1.0
+    parts, cum = [], 0.0
+    for i, (label, p, _) in enumerate(rows):
+        frac = p / total * 100.0
+        end = cum + frac if i < len(rows) - 1 else 100.0
+        parts.append("%s %.4f%% %.4f%%" % (S_PALETTE[i % len(S_PALETTE)], cum, end))
+        cum = end
+    grad = "conic-gradient(" + ", ".join(parts) + ")"
+    leg = "".join(
+        '<li><i style="background:%s"></i>%s <b>%.1f%%</b></li>'
+        % (S_PALETTE[i % len(S_PALETTE)], esc(label), p / total * 100.0)
+        for i, (label, p, _) in enumerate(rows))
+    aria = "立场占比环形图：" + "，".join("%s %s%%" % (l, round(p / total * 100.0, 1)) for l, p, _ in rows)
+    html = ('<div class="donut" role="img" aria-label="%s" style="background:%s;"></div>\n'
+            '<ul class="donut-legend">%s</ul>' % (esc(aria), grad, leg))
+    return html, True
+
+
+def _stance_trend(dist, stance_timeline, focus=0):
+    """趋势折线 .trend（v0.2.13，静态 SVG）：由 opinion.stance_timeline 计算
+    focus 号立场的每日占比坐标（focus 缺省 0 = 占比最高立场）。日期<2 时返回 ("", False)。"""
+    if not dist or not stance_timeline:
+        return "", False
+    order = [str(d.get("stance", "")) for d in dist]
+    if focus < 0 or focus >= len(order):
+        focus = 0
+    name = order[focus]
+    # 归一：日期升序；以样本量最大的记录日为锚点，仅保留 ±7 天内的活跃日，
+    # 剔除孤立背景坐标日（如零散旧帖回潮单日），避免把长历史坐标拉进事件趋势
+    raw = {}
+    for k, seg in (stance_timeline or {}).items():
+        if not isinstance(seg, dict):
+            continue
+        tot = sum(int(v or 0) for v in seg.values())
+        if tot > 0:
+            raw[k] = tot
+    if not raw:
+        return "", False
+    anchor = max(raw, key=lambda k: raw[k])
+    try:
+        anchor_d = date.fromisoformat(str(anchor)[:10])
+    except Exception:
+        anchor_d = None
+    if anchor_d is None:
+        dates = sorted(raw)
+    else:
+        dates = []
+        for k in sorted(raw):
+            try:
+                d0 = date.fromisoformat(str(k)[:10])
+            except Exception:
+                continue
+            if abs((d0 - anchor_d).days) <= 7:
+                dates.append(k)
+        if not dates:
+            dates = sorted(raw)
+    if len(dates) < 2:
+        return "", False
+    vals, weights = [], []
+    for day in dates:
+        seg = stance_timeline[day] or {}
+        tot = sum(int(v or 0) for v in seg.values())
+        w = int(seg.get(name) or 0)
+        if tot > 0:
+            vals.append(w / tot * 100.0)
+            weights.append(tot)
+        else:
+            vals.append(0.0)
+            weights.append(0)
+    if len(dates) > 12:
+        idx = list(range(0, len(dates), int(len(dates) / 11.0) + 1))[:12]
+        if idx[-1] != len(dates) - 1:
+            idx[-1] = len(dates) - 1
+        dates, vals, weights = [dates[i] for i in idx], [vals[i] for i in idx], [weights[i] for i in idx]
+    hi = max(max(vals), 10.0)
+    ymax = max(40.0, float(int((hi + 9) // 10 * 10)))
+    W, H = 560, 220
+    x0, x1, y_top, y_bot = 46, 542, 14, 186
+    span = y_bot - y_top
+    n = len(dates)
+    xs = [round(x0 + (x1 - x0) * i / (n - 1), 1) for i in range(n)]
+    ys = [round(y_bot - min(v, ymax) / ymax * span, 1) for v in vals]
+    pts = " ".join("%s,%s" % (xs[i], ys[i]) for i in range(n))
+    color = S_PALETTE[focus % len(S_PALETTE)]
+    grid = "".join(
+        '<line class="grid-line" x1="%d" y1="%d" x2="%d" y2="%d"></line>' % (x0, y_bot - v / ymax * span, x1, y_bot - v / ymax * span)
+        for v in [ymax * k / 4 for k in range(5)])
+    glab = "".join('<text x="38" y="%d" text-anchor="end">%d%%</text>' % (y_bot - v / ymax * span + 4, int(round(v)))
+                   for v in [ymax * k / 4 for k in range(5)])
+    xlab = "".join('<text x="%s" y="208" text-anchor="middle">%s</text>' % (xs[i], str(dates[i])[5:]) for i in range(n))
+    dots = "".join('<circle class="dot" cx="%s" cy="%s" r="3.5" fill="%s"></circle>' % (xs[i], ys[i], color) for i in range(n))
+    aria = "%s占比趋势：" % name + "，".join("%s %s%%" % (str(dates[i])[5:], round(vals[i], 1)) for i in range(n))
+    area_pts = pts + " %s,%s %s,%s" % (x1, y_bot, x0, y_bot)
+    html = (
+        '<div class="trend">'
+        '<div class="trend-head"><span class="trend-title">%s · 当日构成占比</span>'
+        '<span class="trend-sub">SVG · 由 stance_timeline 生成（记录日 %s ~ %s）</span></div>'
+        '<svg class="trend-svg" viewBox="0 0 %d %d" role="img" aria-label="%s">%s%s'
+        '<polygon class="area" points="%s" fill="%s" fill-opacity="0.10"></polygon>'
+        '<polyline class="line" points="%s" stroke="%s"></polyline>%s%s</svg>'
+        '<ul class="trend-legend"><li><i style="background:%s"></i>%s 当日占比（%%）</li></ul>'
+        '<p class="caption">当日占比 = 该立场当日记录数 ÷ 当日总记录数；孤立背景坐标日与无记录日未计入。</p></div>'
+        % (esc(name), esc(str(dates[0])), esc(str(dates[-1])), W, H, esc(aria),
+           grid, glab,
+           area_pts, color,
+           pts, color, dots, xlab, color, esc(name)))
+    return html, True
+
+
+def _stance_cards_html(cards):
+    """立场卡组 .scards（v0.2.13，视点综合 5.1.2）：结构化卡（卡头名+占比 pill+视角、
+    论证链步骤带 .ssteps + 代表性原文 .quote-list + 防呆 .scard-note）。无输入返回 ""。"""
+    out = []
+    for c in cards or []:
+        if not isinstance(c, dict):
+            continue
+        name = str(c.get("name", "")).strip()
+        if not name:
+            continue
+        pct = str(c.get("pct", "")).strip()
+        view = str(c.get("view", "")).strip()
+        steps = [str(s).strip() for s in (c.get("steps") or []) if str(s).strip()]
+        quotes = []
+        for q in c.get("quotes") or []:
+            if isinstance(q, dict) and str(q.get("txt", "")).strip():
+                quotes.append((str(q.get("like", "")).strip(), str(q.get("txt", "")).strip()))
+        note = str(c.get("note", "")).strip()
+        card = ['<article class="scard">',
+                '<div class="scard-head"><span class="scard-name">%s</span>' % esc(name)]
+        if pct:
+            card.append('<span class="scard-pct">%s</span>' % esc(pct))
+        if view:
+            card.append('<span class="scard-view">%s</span>' % esc(view))
+        card.append("</div>")
+        if steps:
+            card.append('<div class="ssteps">' +
+                        "".join('<div class="sstep">%s</div>' % esc(s) for s in steps) + "</div>")
+        if quotes:
+            card.append('<p class="scard-label">代表性原文</p>')
+            card.append('<div class="quote-list">' + "".join(
+                '<div class="quote-item"><span class="quote-like">%s</span><span class="quote-txt">%s</span></div>'
+                % (esc(like or "原文"), esc(txt)) for like, txt in quotes) + "</div>")
+        if note:
+            card.append('<p class="scard-note">%s</p>' % esc(note))
+        card.append("</article>")
+        out.append("".join(card))
+    if not out:
+        return ""
+    return '<div class="scards">\n' + "\n".join(out) + "\n</div>"
+
+
 def _timeline_html(milestones):
     """竖式里程碑时间轴（.tl）：milestones=[{date,type,tag,title,text,count}]。
     type ∈ official/media/view/bg/quiet/check；count 缺省不显示采集量。"""
@@ -650,57 +855,142 @@ def sec_check(facts):
     return "\n".join(c)
 
 
-def sec_opinion(opinion, viewpoint_md):
+def _cards_from_opinion(dist):
+    """无 --stance-cards 结构化输入时的程序化回退：按立场生成基础卡组
+    （卡头 名+占比+视角 ｜ 代表性原文 .quote-list ｜ 防呆 note）。
+    『无关/其他』（信息帖/提问）不设卡，论证链步骤需结构化输入提供。"""
+    cards = []
+    for d in dist or []:
+        name = str(d.get("stance", "")).strip()
+        if not name or name == "无关/其他":
+            continue
+        pct = float(d.get("pct") or 0)
+        cnt = int(d.get("count") or 0)
+        minority = bool(d.get("minority"))
+        samples = (d.get("top_samples") or [])[:3]
+        quotes = []
+        for s in samples:
+            if not isinstance(s, dict):
+                continue
+            like = str(s.get("likes") or "")
+            txt = _clip_text(s.get("content", ""), 120)
+            if txt:
+                quotes.append({"like": ("赞%s" % like) if like else "原文", "txt": txt})
+        note = None
+        if minority:
+            note = "少数派：占比 <10%，样本有限；引用时须标注信源稀缺，不作群体代表性推断。"
+        cards.append({
+            "name": name,
+            "pct": ("%.1f%% · %d 条" % (pct, cnt)) if cnt else ("%.1f%%" % pct),
+            "view": "少数派 · 样本稀缺" if minority else "主要声量立场",
+            "quotes": quotes,
+            "note": note,
+        })
+    return cards
+
+
+def sec_opinion(opinion, viewpoint_md, stance_cards=None):
     c = ["<h2>五、舆论观点综合</h2>"]
     if opinion and opinion.get("stance_distribution"):
         dist = opinion["stance_distribution"]
-        # 立场占比条形图（纯 CSS；保留下方表格便于精确阅读/打印）
-        c.append('<div class="bars" aria-label="立场占比条形图">')
+        # 5.1 双栏：左条形（读精确值）右环形（看占比直觉）——v0.2.13 .chart-split/.donut
+        bars_html = ['<div class="bars" aria-label="立场占比条形图">']
         for d in dist:
             pct = d.get("pct", 0) or 0
-            c.append('<div class="bar-row"><span class="bar-label">%s</span>'
-                     '<span class="bar-track"><span class="bar-fill" style="width:%s%%"></span></span>'
-                     '<span class="bar-val">%s%% · %s 条</span>%s</div>'
-                     % (esc(d.get("stance", "")), pct, pct, d.get("count", 0),
-                        '<span class="mark mark-single">少数派</span>' if d.get("minority") else ""))
-        c.append("</div>")
-        c.append("<table><thead><tr><th>立场</th><th>占比</th><th>条数</th><th>少数派</th><th>高赞代表（前3）</th></tr></thead><tbody>")
+            bars_html.append('<div class="bar-row"><span class="bar-label">%s</span>'
+                             '<span class="bar-track"><span class="bar-fill" style="width:%s%%"></span></span>'
+                             '<span class="bar-val">%s%% · %s 条</span>%s</div>'
+                             % (esc(d.get("stance", "")), pct, pct, d.get("count", 0),
+                                '<span class="mark mark-single">少数派</span>' if d.get("minority") else ""))
+        bars_html.append("</div>")
+        donut_html, donut_ok = _stance_donut(dist)
+        if donut_ok:
+            c.append('<div class="chart-split">\n  <div>\n%s\n  </div>\n  <div>\n%s\n'
+                     '  <p class="legend">环形图与左侧条形图为同一占比的两种编码（生成端按数据自动计算）。</p>'
+                     '\n  </div>\n</div>' % ("\n".join(bars_html), donut_html))
+        else:
+            c.append("\n".join(bars_html))
+        # 高赞代表 → 表格（v0.2.13：cell 内 .quote-list/.quote-item 逐条成块）
+        c.append('<div class="table-scroll"><table><thead><tr><th>立场</th><th>占比</th><th>条数</th>'
+                 '<th>少数派</th><th>高赞代表（前3）</th></tr></thead><tbody>')
         for d in dist:
-            tops = "；".join("[赞%s] %s" % (s["likes"], _clip_text(s["content"]))
-                             for s in d.get("top_samples", []))
-            c.append("<tr><td>%s</td><td>%s%%</td><td>%d</td><td>%s</td><td>%s</td></tr>" % (
-                esc(d["stance"]), d["pct"], d["count"],
-                "是" if d.get("minority") else "—", tops))
-        c.append("</tbody></table>")
-        # 焦点转移：立场 × 日期 堆叠条（opinion.stance_timeline 为新增字段，缺失则回退原提示）
+            tops = "".join(
+                '<div class="quote-item"><span class="quote-like">赞%s</span><span class="quote-txt">%s</span></div>'
+                % (esc(str(s.get("likes", ""))), esc(_clip_text(s.get("content", ""), 90)))
+                for s in d.get("top_samples", []) if isinstance(s, dict))
+            if not tops:
+                tops = '<span class="quote-txt">—</span>'
+            c.append('<tr><td>%s</td><td>%s%%</td><td>%d</td><td>%s</td><td><div class="quote-list">%s</div></td></tr>'
+                     % (esc(d["stance"]), d["pct"], d["count"],
+                        "是" if d.get("minority") else "—", tops))
+        c.append("</tbody></table></div>")
+        # 5.2 焦点转移双栏：左堆叠（当日各立场条数）右趋势折线（focus=0 主立场当日占比）——v0.2.13
         st = opinion.get("stance_timeline")
         if isinstance(st, dict) and st:
             order = [d["stance"] for d in dist]
-            c.append('<div class="stacks" aria-label="焦点转移（立场×日期）">')
+            stacks_html = ['<div class="stacks" aria-label="焦点转移（立场×日期）">']
             for day in sorted(st):
                 segs = []
                 for i, sname in enumerate(order, 1):
                     n = (st[day] or {}).get(sname, 0)
                     if n:
                         segs.append('<span class="stack-seg s%d" style="flex:%d"></span>' % (i, n))
-                c.append('<div class="stack-row"><span class="stack-date">%s</span>'
-                         '<span class="stack-track">%s</span></div>' % (esc(day), "".join(segs)))
-            c.append('<div class="stack-legend">')
+                stacks_html.append('<div class="stack-row"><span class="stack-date">%s</span>'
+                                   '<span class="stack-track">%s</span></div>' % (esc(day), "".join(segs)))
+            stacks_html.append('<div class="stack-legend">')
             for i, sname in enumerate(order, 1):
-                c.append('<span><i class="s%d"></i>%s</span>' % (i, esc(sname)))
-            c.append("</div></div>")
+                stacks_html.append('<span><i class="s%d"></i>%s</span>' % (i, esc(sname)))
+            stacks_html.append("</div></div>")
+            trend_html, trend_ok = _stance_trend(dist, st, focus=0)
+            if trend_ok:
+                c.append('<div class="chart-split">\n  <div>\n%s\n  </div>\n  <div>\n%s\n'
+                         '  </div>\n</div>' % ("\n".join(stacks_html), trend_html))
+            else:
+                c.append("\n".join(stacks_html))
         elif opinion.get("timeline"):
             c.append("<p>焦点时间分布见第二章时间线。</p>")
     else:
         c.append("<p>未提供舆论聚类数据（opinion.json 缺失或为空）。</p>")
+    # 立场卡组 + 论证链带（5.1.2，v0.2.13）：结构化卡；无 --stance-cards 时按 opinion 程序化回退
+    cards = []
+    if stance_cards:
+        cards = [x for x in stance_cards if isinstance(x, dict)]
+    if not cards and opinion and opinion.get("stance_distribution"):
+        cards = _cards_from_opinion(opinion["stance_distribution"])
+    cards_html = _stance_cards_html(cards)
+    if cards_html:
+        c.append('<h3>各立场论证结构与代表性论点（立场卡组）</h3>')
+        c.append('<p class="legend">卡头 = 立场名 + 占比 + 视角；论证链步骤带自动编号；代表性原文来自语料高赞样本'
+                 '（截断节选，全文见来源索引）；防呆行保留少数派/反讽警示。无独立论证的「无关/其他（信息帖/提问）」不设卡。</p>')
+        c.append(cards_html)
     if viewpoint_md:
         vmd = md_to_html(viewpoint_md)
-        if not vmd.lstrip().startswith("<h"):
+        if vmd.lstrip().startswith("<h"):
+            # 模板 v0.2.13：h3 后紧跟 .viewpoint-meta 即视为视点综合小节（h3 保持 <main> 直接子级以保留自动编号）
+            m = re.match(r"(<h3[^>]*>.*?</h3>)(.*)$", vmd, re.S)
+            if m:
+                vmd = m.group(1) + _viewpoint_meta(opinion) + "\n" + m.group(2)
+        else:
             c.append("<h3>视点综合（LLM 分析）</h3>")
+            c.append(_viewpoint_meta(opinion))
         c.append(vmd)
     else:
         c.append('<p class="legend">（未提供视点综合 markdown：建议 LLM 按 opinion.md 提炼各立场论证结构、标注少数派与对立观点、判断焦点转移后以 --viewpoint 注入。）</p>')
     return "\n".join(c)
+
+
+def _viewpoint_meta(opinion):
+    """视点综合信息条（v0.2.13 .viewpoint-meta/.viewpoint-snap）：动态快照徽章 + 一句说明。"""
+    day = ""
+    if opinion:
+        st = opinion.get("stance_timeline") or {}
+        tl = sorted(st.keys()) if st else []
+        if tl:
+            day = str(tl[-1])[:10]
+    snap = ("动态快照 · %s" % day) if day else "动态快照"
+    return ('<div class="viewpoint-meta"><span class="viewpoint-snap">%s</span>'
+            '<span>以下为 LLM 对各立场论证结构、少数派与对立观点、焦点转移的视点综合；数据与比例以本章上方聚类为准。</span></div>'
+            % esc(snap))
 
 
 def _collect_sources(sources, recs):
@@ -735,12 +1025,26 @@ def sec_sources(sources, recs):
         if any(grades.values()):
             bits.append("A官方 %d · B主流 %d · C自媒体+样本 %d" % (grades["A"], grades["B"], grades["C"]))
         c.append('<p class="stat-line">%s</p>' % " ｜ ".join(bits))
-        c.append('<div class="table-scroll"><table><thead><tr><th>编号</th><th>来源</th><th>URL</th></tr></thead><tbody>')
+        c.append('<div class="table-scroll"><table><thead><tr><th>编号</th><th>来源 / 平台</th><th>标题摘要</th>'
+                 '<th>分级</th><th>原文</th></tr></thead><tbody>')
+        gname = {"A": "A 官方/权威", "B": "B 主流", "C": "C 自媒体/样本"}
         for i, s in enumerate(srcs, 1):
             g = str(s.get("grade", "")).strip().upper()
             cls = ' class="source-%s"' % g if g in ("A", "B", "C") else ""
-            c.append('<tr id="ref%d"%s><td>[%d]</td><td>%s</td><td><a href="%s" target="_blank" rel="noopener">链接</a></td></tr>'
-                     % (i, cls, i, esc(s.get("name", "")), esc(s.get("url", ""))))
+            # 来源/标题拆列：name 形如「媒体：标题」时拆开，卡片按列读取（refpop: cells[1]=来源, cells[2]=标题）
+            nm = str(s.get("name", "")).strip()
+            org, title = nm, ""
+            for sep in ("：", ":", "｜", "|"):
+                if sep in nm:
+                    org, title = nm.split(sep, 1)
+                    org, title = org.strip(), title.strip()
+                    break
+            if not title:
+                title = "（无标题摘要）"
+            url = str(s.get("url", "")).strip()
+            link_html = ('<a href="%s" target="_blank" rel="noopener">原文 ↗</a>' % esc(url)) if url else "—"
+            c.append('<tr id="ref%d"%s><td>[%d]</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
+                     % (i, cls, i, esc(org), esc(title), gname.get(g, g), link_html))
         c.append("</tbody></table></div>")
     return "\n".join(c)
 
@@ -990,7 +1294,7 @@ def _masthead_html(event, facts, opinion, recs, title, intro):
 
 def build_content(event, facts, opinion, sources, recs, viewpoint_md, coverage_md, extra_md, intros=None,
                   actors=None, track=None, mast_title="", mast_intro="", abstract_text="", nav_drawer=True,
-                  milestones=None, compliance=None):
+                  milestones=None, compliance=None, stance_cards=None):
     viewpoint_md = _read_md(viewpoint_md)
     coverage_md = _read_md(coverage_md)
     intros = intros or {}
@@ -1001,7 +1305,7 @@ def build_content(event, facts, opinion, sources, recs, viewpoint_md, coverage_m
         sec_timeline(opinion, recs, milestones),
         sec_facts(facts, extra_md),
         sec_check(facts),
-        sec_opinion(opinion, viewpoint_md),
+        sec_opinion(opinion, viewpoint_md, stance_cards),
         sec_sources(sources, recs),
         sec_coverage(facts, recs, coverage_md, compliance),
         sec_method(),
@@ -1056,12 +1360,13 @@ def main():
     ap.add_argument("--coverage", default="", help="LLM 覆盖完整性补充 markdown")
     ap.add_argument("--extra", default="", help="附加 markdown（附录）")
     ap.add_argument("--actors", default="", help="角色小词典 json：[{name,type,side,position,stance,quotes,ref,credibility}]（可选，无则不渲染）")
+    ap.add_argument("--stance-cards", default="", help="立场卡组 json（v0.2.13）：[{name,pct,view,steps,quotes[{like,txt}],note}]（可选；缺省按 opinion 立场程序化回退生成基础卡组）")
     ap.add_argument("--track", default="", help="说法×证实双轨轴 json：{\"rows\":[{day,lane:claim|verify,type,text,ref}]}（可选，无则不渲染）")
     ap.add_argument("--intros", default="", help="章节导读覆盖 json：{\"1\":\"…\",\"2\":\"…\",…,\"9\":\"…\",\"appendix\":\"…\"}（缺省按数据程序化生成导航句）")
     ap.add_argument("--title", default="", help="报头主标题（可含 <em> 强调）；缺省用 --event 原文")
     ap.add_argument("--intro", default="", help="报头一句话导语（可选）；留空则不渲染 intro")
     ap.add_argument("--template", default="", help="模板 HTML 路径（默认：技能自带副本 templates/report_template.html；试验/副本验证用）")
-    ap.add_argument("--abstract", default="", help="事件摘要两段式 markdown（空行分段：段一事件→进展→舆论；段二真实性→结构提示）")
+    ap.add_argument("--abstract", default="", help="事件摘要 markdown（自动识别：结构化标签式——标签单独成段写 **一句话结论** 等、后空行接内容；或旧两段式——空行分段，段一事件→进展→舆论、段二真实性→结构提示）")
     ap.add_argument("--timeline-milestones", default="", help="竖式里程碑时间轴 json：[{date,type,tag,title,text,count}]（可选；缺省回退日期×记录数表）")
     ap.add_argument("--nav-drawer", dest="nav_drawer", action=argparse.BooleanOptionalAction, default=True, help="右侧毛玻璃悬浮目录（默认开；--no-nav-drawer 关闭）")
     ap.add_argument("--joint", action="store_true", help="三技能联合任务模式：注入联合 meta 标记，且必须提供 --compliance 合规账本（CONTRACT-joint）")
@@ -1082,6 +1387,9 @@ def main():
     track = load_json(args.track)
     if not isinstance(track, dict):
         track = {}
+    stance_cards = load_json(args.stance_cards)
+    if not isinstance(stance_cards, list):
+        stance_cards = None
     milestones = load_json(args.timeline_milestones)
     if not isinstance(milestones, list):
         milestones = []
@@ -1102,7 +1410,8 @@ def main():
                             args.viewpoint, args.coverage, args.extra, intros,
                             actors, track, args.title, args.intro,
                             abstract_text=abstract_text, nav_drawer=args.nav_drawer,
-                            milestones=milestones, compliance=compliance)
+                            milestones=milestones, compliance=compliance,
+                            stance_cards=stance_cards)
     html = html.replace("<!-- TITLE -->", esc(args.event) + " · 综合分析报告")
     # 单对标记装配：替换模板 CONTENT_START~CONTENT_END 之间的占位注释段，避免残留第二个 END
     html = re.sub(r"<!-- CONTENT_START -->.*?<!-- CONTENT_END -->",
