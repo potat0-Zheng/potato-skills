@@ -23,6 +23,9 @@ model: deepseek-v4-pro
 
 若用户指令中无法判断模式，默认使用 `verify`。若用户的需求明显是"把这些材料整理到一起"或"梳理这个事件的来龙去脉"，应自动选择 `compile` 或 `timeline`。
 
+**联合态只走 `verify` + `facts.json`**（v2）：被三合一编排为第 ③ 阶段时，不进入 `compile` / `timeline`
+模式——汇编与时间线是 ② 揽风云的职责，同时启用会产生"谁写汇编"的歧义与互相覆盖。这两个模式是独立态模式。
+
 ---
 
 ## 输入方式
@@ -34,11 +37,12 @@ model: deepseek-v4-pro
 
 ---
 
-## 技能路径变量
+## 技能路径
 
-本技能目录的绝对路径（记作 `{SKILL_DIR}`）为 `C:\Users\郑懿宸\.dsh\skills\po-xu-wang`，全部核查工具位于 `{SKILL_DIR}\tools\`。
+工具目录的绝对路径是 `C:\Users\郑懿宸\.dsh\skills\po-xu-wang\tools\`。
 
-**重要**：DSH 环境下每次 pwsh 调用都是全新进程，环境变量不跨调用持久，因此工具调用统一写绝对路径 `C:\Users\郑懿宸\.dsh\skills\po-xu-wang\tools\`，不再通过 `$env:SKILL_DIR` 设置环境变量。
+DSH 环境下每次 pwsh 调用都是全新进程，环境变量不跨调用持久，因此**工具调用一律写这个绝对路径**。
+`${SKILL_DIR}` / `{SKILL_DIR}` 这类占位写法**已废止**，本文其他地方不再出现。
 
 **编码注意事项**：
 - 含中文的 Python 脚本**不支持**通过 `python -c` 内联执行（PowerShell 5.1 的 UTF-16 LE 编码会导致语法错误）。
@@ -51,55 +55,64 @@ model: deepseek-v4-pro
 
 ### 阶段 0：网络可达性探活
 
-在开始核查前，**先对工具 API 进行快速探活**（每个目标请求不超过 5 秒），将工具分为"可用"和"不可用（跳过）"两组。
+在开始核查前，**先对本次真正要调用的端点各发一次最小真实请求**，将工具分为"可用"和"不可用（跳过）"两组。
 
 #### 探活脚本模板
 
-将以下脚本写入临时文件 `probe.py` 并执行：
+**端点清单必须来自工具源码，不得凭印象写域名**（与实现不符的域名表会给出"可用"的假结论）。
+据源码列端点：`grep -o 'https\?://[a-zA-Z0-9.-]*' tools/*.py | sort -u`。
 
 ```python
 # -*- coding: utf-8 -*-
 import socket, sys
 
+# 每项＝(host, port)；不要写工具不访问的域名。当前 china_sources.py 用以下四个端点。
 targets = {
-    "china_sources": ("www.piyao.org.cn", 443),
-    "gov_stats": ("data.stats.gov.cn", 443),
-    "world_bank": ("api.worldbank.org", 443),
-    "google_factcheck": ("contentfactchecktools.googleapis.com", 443),
-    "wayback": ("archive.org", 443),
+    "china_sources.piyao":    ("so.news.cn", 443),
+    "china_sources.weibo":    ("s.weibo.com", 443),
+    "china_sources.qcc":      ("www.qcc.com", 443),
+    "china_sources.thepaper": ("www.thepaper.cn", 443),
+    "gov_stats":              ("data.stats.gov.cn", 443),
+    "world_bank":             ("api.worldbank.org", 443),
+    "google_factcheck":       ("contentfactchecktools.googleapis.com", 443),
+    "wayback":                ("archive.org", 443),
 }
 
-results = {}
 for name, (host, port) in targets.items():
     try:
-        socket.setdefaulttimeout(5)
         s = socket.create_connection((host, port), timeout=5)
         s.close()
-        results[name] = "OK"
+        print(f"PROBE:{name}=TCP_OK")
     except Exception as e:
-        results[name] = f"UNREACHABLE ({e})"
-
-for name, status in results.items():
-    print(f"PROBE:{name}={status}")
+        print(f"PROBE:{name}=UNREACHABLE ({e})")
 ```
 
-探活结果记入工具可用性清单，后续环节只调度可用的工具。无法访问的工具直接在报告中标注"网络不可达，本次跳过"。**若探活不可达，先区分阻隔类型：权限类（沙箱/代理放行）与凭证类先向用户索取或升级重试同一条命令，不得直接判「跳过」；确属网络环境不可达才记录跳过并给出替代路径（如存档站/远端主机）。**
+探活结论分三档，方法论说明中如实落档（不许静默跳过，跳过项写入合规账本）：
+
+| 档 | 判据 | 处置 |
+|----|------|------|
+| 可用 | `TCP_OK` 且随后真实调用返回可解析内容 | 正常调度 |
+| 凭证类 | `TCP_OK` 但调用返回空/被拦（微博、企查查常见） | 向用户索取登录态，**不得**记为"网络不可达" |
+| 不可达 | `UNREACHABLE` | 先分权限类（沙箱/代理→升级重试）与环境类；确属网络环境才记"跳过"并给替代路径（存档站/远端主机） |
+
+**`TCP_OK` ≠ 工具可用**：TCP 只证明端口通得了。
 
 ---
 
-### 阶段 1：内容获取（三级抓取回退链）
+### 阶段 1：内容获取（四级抓取回退链）
 
 按以下顺序尝试获取待核查内容，每一级失败后**自动降级且不可跳过**：
 
 | 级别 | 方式 | 超时 | 失败处理 |
 |------|------|------|----------|
-| L1 | WebFetch 直接抓取 | 5 秒 | 自动降级到 L2 |
-| L2 | curl 命令行抓取 | 15 秒 | 自动降级到 L3 |
+| L1 | `pwsh` + `curl` 直接抓取（DSH 无 WebFetch 工具，"WebFetch 不可用"是历史写法） | 15 秒 | 被墙 → 先走 L1b；超时/格式不支持 → 直接 L2 |
+| L1b | 存档站替代抓取（`web.archive.org` / `archive.is`，被墙时专用） | 30 秒 | 自动降级到 L2 |
+| L2 | 搜索引擎摘要层核（未获取原文全文，见「信源可达性」§2） | — | 自动降级到 L3 |
 | L3 | 提示用户粘贴原文内容 | — | 等待用户提供 |
 
-#### L2 curl 命令模板
+#### L1 curl 命令模板
 
-当 L1 WebFetch 返回 "unable to verify if domain is safe" 或超时时，自动执行 L2：
+当 `curl` 返回 "unable to verify if domain is safe" 或超时时，按住上表降级：
 
 ```powershell
 curl -s -L --max-time 15 -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "<目标URL>" | Select-Object -First 500
@@ -110,11 +123,11 @@ curl -s -L --max-time 15 -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x6
 #### 抓取结果标注
 
 在报告的"方法论说明"中明确标注最终采用的获取方式：
-- "L1 WebFetch 成功获取"
-- "L1 失败，L2 curl 成功获取"
-- "L1 被墙 → 存档站替代抓取成功"（见「信源可达性」章节）
-- "L1/L2 均失败，基于用户提供的文本进行核查"
-- "L1/L2/存档站均失败，基于搜索引擎摘要（未获取原文全文）进行核查"
+- "L1 curl 成功获取"
+- "L1 被墙 → L1b 存档站替代抓取成功"（见「信源可达性」章节）
+- "L1/L1b 均失败 → L2 基于搜索引擎摘要（未获取原文全文）核查"
+- "L1/L1b/L2 均失败 → L3 基于用户提供的文本核查"
+- "L1 不可用（curl 缺失/权限受限）"：先区分权限类与凭证类并按阶段 0 处置，不得直接判跳过
 
 ---
 
@@ -133,7 +146,12 @@ curl -s -L --max-time 15 -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x6
 | `rumor` | 涉及已可能被辟谣的传言 | china_sources.py (piyao), google_factcheck.py |
 | `general` | 通用事实（不属以上） | WebSearch 多源检索 |
 
-4. 观点部分单独标记，备后续辨析。
+4. **只登记可裁决真假的事实陈述**，并**一条只承载一个可独立裁决的主张**：
+   - 四类主张**不进登记册**（评价性判断 / 法律与专业定性 / 因果推断 / 证明力评价）——其可核部分
+     （"某人公开表示…"）仍可登记，但裁决对象是"该意见被如实转述"，不是"该法律结论成立"；
+   - 一条 `claim` 内含两个以上可分别给出不同裁决词的子句，即属合并，须拆条（判据见 `CONTRACT-joint.md` §6）。
+   把律师意见、当事人转述或四五件事合并成一条判「真实」，读者会读成"权威已作认定 / 四五件都核过了"。
+5. **观点部分单独标记**，备后续辨析（这些内容在联合态归 `opinion_analysis`，不占事实断言位）。
 
 ---
 
@@ -151,15 +169,16 @@ curl -s -L --max-time 15 -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x6
 - 中文语境内容 → china_sources.py 优先于 google_factcheck.py
 - 英文/国际内容 → google_factcheck.py + world_bank.py 优先
 
-#### 中文语境强制检查点
+#### 中文语境的 china_sources 处理
 
-**中文语境下必须至少调用一次 china_sources.py**（通过 `ChinaVerifyClient().verify()` 或直接调用其子功能）。
+**按断言类型分流**（取代原先"必须至少调一次"与"不匹配就跳过"的自相矛盾）：
 
-若 china_sources.py 在探活中标记为"不可达"或因其他原因未调用，必须在报告的"方法论说明"中明确记录：
-- "china_sources.py 因网络不可达跳过"
-- "china_sources.py 因无匹配断言类型跳过（理由：……）"
+- 断言带 `rumor` / `social_media` / `enterprise` 标签，或需查"某说法在辟谣平台有无记录"
+  → **必须调用** china_sources.py（`ChinaVerifyClient().verify()` 或对应子功能）；
+- 断言属**事件经过类**（时间、地点、行为、双方主张、监控画面等）→ 辟谣平台与企查查
+  **结构上无匹配**，此时不调用，在方法论说明中登记"结构上无匹配"即可，**无须逐条辩解**。
 
-不允许无记录地静默跳过。
+不允许无记录地静默跳过；也不允许把"结构上无匹配"写成"已核查未发现"。
 
 ---
 
@@ -182,9 +201,15 @@ curl -s -L --max-time 15 -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x6
 
 ### 阶段 5：综合判断
 
-- 为每个事实断言给出核查结论：`真实` / `部分真实` / `失实` / `证据不足`。
+- 为每个事实断言给出核查结论：`真实` / `部分真实` / `失实` / `证据不足`——**只用这四个词**，
+  不加括号后缀（如"真实（观点性判断）"：观点性主张本就不该登记为事实断言，见阶段 2 第 4 条）。
 - **否定性主张**（"X 未发生 / 官方未回应 / 未见表态"类）默认裁决「证据不足」并注记"检索未见支持证据"；仅当存在权威渠道的明确否定声明时才可判「真实」——**检索不到 ≠ 确认未发生**。
-- **引文类断言**须标注引文来源等级（官方/本人账号原文 ＞ 权威媒体全文 ＞ 转载引文 ＞ 搜索摘要标题层）并尽量与多版本比对；证据仅到转载引文/摘要层的，不得单独支撑「真实」，应表述为「报道属实（原文未核）」或降级。
+  **且必须以否定句登记**：`claim` 写「截至 X 未见 Y」，禁止用肯定句登记（"某机关已作出通报"）
+  而把"尚无"写进短标题——同一张卡里正文、标题、裁决三向相反，读者按标题读成"确认没有"、按正文读成"确认有了"。
+- **引文类断言**须标注引文来源等级并尽量与多版本比对；证据仅到转载引文/摘要层的，不得单独支撑「真实」，
+  应表述为「报道属实（原文未核）」或降级。**等级值的口径见 `CONTRACT-joint.md` §2，本处不重复列举**——
+  该等级量的是"证据本身的形态"，不是"本次核验取得了什么"；"我这次没抓到原文全文"不构成降级理由
+  （那是归档完整度问题，记在 `sources.json.fetched_file` 缺位上）。
 - 对整体事实指向进行吻合度评估（如：整体真实，但细节有误）。
 - 开展观点辨析：分析隐含前提、逻辑谬误、立场偏差等，用严谨的推理说明从证据到结论的推导过程（例如："虽然 A 数据真实，但 B 存在断章取义，因此结论不可靠"）。
 - 评估综合可信度时，除真实性本身，还需考虑：
@@ -195,24 +220,24 @@ curl -s -L --max-time 15 -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x6
 
 ## 信源可达性：被墙外媒的应对策略
 
-国际话题核查中，外媒报道是关键信源。**WebSearch 搜索阶段的节点在境外，不受本地网络限制**；被墙阻断的是 WebFetch 抓取原文阶段，以及 world_bank.py / google_factcheck.py 等需翻墙工具的 API 调用（阶段 0 探活已识别）。
+国际话题核查中，外媒报道是关键信源。**WebSearch 搜索阶段的节点在境外，不受本地网络限制**；被墙阻断的是 curl 抓取原文阶段（L1），以及 world_bank.py / google_factcheck.py 等需翻墙工具的 API 调用（阶段 0 探活已识别）。
 
-以下策略与三级回退链（L1→L2→L3）互补，聚焦于"被墙但仍需获取内容"的场景：
+以下策略与四级回退链（L1→L1b→L2→L3）互补，聚焦于"被墙但仍需获取内容"的场景：
 
 ### 1. 存档站注入回退链
 
-L1 WebFetch 因被墙而失败时（非超时/格式不支持），在降级到 L2 curl 之前，先尝试存档站：
+L1 curl 因被墙而失败时（非超时/格式不支持），按回退链先走 **L1b 存档站**，不跳过：
 
 - `https://web.archive.org/web/<原URL>` — 本技能内置 wayback.py 已封装此功能，但 wayback.py 设计用于"验证历史快照"，此处用作抓取替代入口
 - `https://archive.is/<原URL>` — wayback.py 未命中时手动构造
 
-存档站成功获取的，在方法论说明中标注为"L1 被墙 → 存档站替代抓取"，视为等效于 L1 获取。存档站也失败，才降级到 L2 curl。
+存档站成功获取的，在方法论说明中标注为"L1 被墙 → L1b 存档站替代抓取"，视为等效于 L1 获取。存档站也失败，才降级到 L2（摘要层）。
 
 ### 2. 搜索引擎摘要作为独立证据层
 
 WebSearch 返回的结果摘要往往已包含可核查的关键事实——数字、日期、主体、结论。同一事实通常被多个来源的摘要交叉覆盖，**摘要本身即可支撑初步核查结论**。
 
-这不是 L3 之后的无奈之举，而是在阶段 2（内容拆解）之前就可以主动利用的策略：先用摘要交叉确认事实轮廓，确有争议点再针对性地走存档站或 L2。已在注意事项中覆盖"基于搜索引擎摘要进行核查"的标注要求。
+这既是回退链的 **L2**，也可以在阶段 2（内容拆解）之前就主动利用：先用摘要交叉确认事实轮廓，确有争议点再针对性地走存档站或 L1。已在注意事项中覆盖"基于搜索引擎摘要进行核查"的标注要求（摘要层证据按 `evidence_level=4` 登记，不得单独支撑「真实」）。
 
 ### 3. 多源交叉确认消化缺口
 
@@ -286,25 +311,25 @@ WebSearch 返回的结果摘要往往已包含可核查的关键事实——数�
 
 ### 联合模式（三合一：产出 `facts.json` 供 build_report 装配）
 
-被 san-he-yi（三合一）编排为第 ③ 阶段时，核查结论不写 Word/HTML，而是把登记册裁决写入 `data/{event_id}/facts.json`（schema 对齐百宝袋 `build_report.py` 与 `CONTRACT-joint.md` §2/§3）：
+被 san-he-yi（三合一）编排为第 ③ 阶段时，核查结论不写 Word/HTML，而是把登记册写入 `data/{event_id}/facts.json`。
 
-```json
-{
-  "claims": [
-    {
-      "id": "F1",
-      "claim": "断言原文（含引文与正文转述，逐条登记）",
-      "short_title": "≤24 字模型摘要（只压缩原文、保留限定词）",
-      "verdict": "真实 | 部分真实 | 失实 | 证据不足",
-      "evidence_level": "1|2|3|4（官方文件/本人账号原文 ＞ 权威媒体全文 ＞ 转载引文 ＞ 搜索摘要/标题层）",
-      "reason": "裁决说明",
-      "evidence": [{"source": "证据源描述（可多条，与来源索引对应）"}]
-    }
-  ]
-}
-```
+**字段表不在这里**——`facts.json` 的 schema 唯一权威是 `CONTRACT-joint.md §11`（与 ② 的工件同处）。
+本技能不复制字段、不即兴加字段。
 
-注意：断言原文字段名是 `claim`（不是 `text`）、裁决值内联在每条 `claims[].verdict`（不是独立 `verdicts` 数组）——`build_report.py` 直接读这些字段，编号按 claims 顺序（#1 起）。证据隔离与判定规则遵 `CONTRACT-joint.md`（第 4 章不得引用第 3 章转述作证据；证据等级与裁决词见其 §2/§3）。
+登记阶段的硬约束（判据一律在契约，本处不复述）：
+
+| 事项 | 依据 |
+|------|------|
+| 断言颗粒度、"哪些主张不进登记册"（评价性 / 法律定性 / 因果推断 / 证明力评价） | §6 |
+| 证据等级口径（量证据形态，不量"我这次抓到没抓到"）；证据行不得写抓取动作 | §2 |
+| 裁决词只用 4 个；否定性主张必须以否定句登记 | §3 |
+| `evidence[]` 只放支撑证据，"反证 / 检索未见"写进 `reason` | §11 · 门禁 G13 |
+| 裁决必须回写叙事：`证据不足 / 失实` 的具名数字不得在第一、二、五章直陈 | §6 · 门禁 R5 |
+| 口径冲突只用 §11 定死的那一种 `conflicts` 形态 | §11 · 门禁 G13 |
+| verify 九章在联合态的去向（哪章映射到哪个字段、哪章不做） | §11 首段表格 |
+
+装配端只消费 `claims`；编号按 `claims` 顺序（#1 起），`ref` 必须落在 `sources.json` 的编号域内。
+**独立态**（未接入三合一）仍按上文九章节输出，不受本节影响。
 
 ---
 
@@ -349,22 +374,25 @@ python <脚本文件.py>
 ## 注意事项
 
 - 若用户仅提供复述内容而非原始链接，必须在报告的"方法论说明"中注明"基于用户描述进行核查，未直接获取原始链接"。
-- 若 WebFetch(L1) 和 curl(L2) 均失败，报告中须注明"基于搜索引擎摘要进行核查，未获取原文全文"。
+- 若 L1（curl）与 L1b（存档站）均失败，报告中须注明"基于搜索引擎摘要进行核查，未获取原文全文"。
 - **被墙外媒**：不依赖本地网络直连外媒网站。具体策略见「信源可达性：被墙外媒的应对策略」章节。严格执行禁止项——尤其不使用外媒中文版替代英文原站。
 - 始终保持证据优先，避免用大模型内部知识替代外部查证。
 - 综合可信度评估必须包含对自身判断局限性的说明。
-- **工具调用路径使用 `${SKILL_DIR}\tools\` 或回退绝对路径**。
-- **所有工具调用使用后台任务（run_in_background）并行执行**，15 秒后通过 TaskOutput 获取结果，超时则标记跳过。
-- **中文新闻优先使用 china_sources.py 的国内核查源**，境外工具仅作为补充。中文语境必须至少调用一次 china_sources.py，跳过须记录原因。
-- 抓取内容时遵循三级回退链（L1→L2→L3），**不可跳过**，并明确标注实际使用的获取方式。
+- **工具调用一律写绝对路径** `C:\Users\郑懿宸\.dsh\skills\po-xu-wang\tools\`——DSH 每次 pwsh 都是新进程，
+  `$env:SKILL_DIR` 不跨调用持久（改为相对/占位写法是历史遗留，已废止）。
+- **所有工具调用使用后台任务（run_in_background）并行执行**，15 秒后通过 `job_output` 取结果，超时则标记跳过。
+  （DSH 取后台输出的工具是 `job_output`；"TaskOutput"是历史写法。）
+- **中文新闻优先使用 china_sources.py 的国内核查源**，境外工具仅作为补充；调用与否按阶段 3 的
+  「按断言类型分流」判据，事件经过类断言属默认豁免。
+- 抓取内容时遵循四级回退链（L1→L1b→L2→L3），**不可跳过**，并明确标注实际使用的获取方式。
 - **含中文的 Python 脚本不可通过 `python -c` 内联执行**，必须先 Write 到 .py 文件再执行。
-- 阶段 0 网络探活**必须执行**，探活结果影响后续全部工具调度决策。
+- 阶段 0 网络探活**必须执行**（探真正要调的端点），探活结果影响后续全部工具调度决策。
 
 ---
 
 ## 内置工具
 
-所有工具位于 `${SKILL_DIR}\tools\` 目录下。调用时统一通过 PowerShell 执行 Python 脚本文件（非内联）。
+所有工具位于 `C:\Users\郑懿宸\.dsh\skills\po-xu-wang\tools\` 目录下。调用时统一通过 PowerShell 执行 Python 脚本文件（非内联）。
 
 **注意**：由于 PowerShell 5.1 编码限制，所有含中文的 Python 调用必须先通过 Write 工具写入 .py 临时文件，再通过 PowerShell 执行该文件。
 
@@ -372,12 +400,15 @@ python <脚本文件.py>
 
 | 工具文件 | 用途 | 适用断言类型 | 网络要求 |
 |----------|------|-------------|----------|
-| `china_sources.py` | 辟谣平台/微博/企查查/澎湃新闻 | rumor, social_media, enterprise | 国内可通 |
+| `china_sources.py` | 辟谣（so.news.cn）/微博/企查查/澎湃新闻 | rumor, social_media, enterprise（**纯事件经过类无匹配**，见阶段 3） | 国内可通；微博/企查查另需登录态 |
 | `gov_stats.py` | 国家统计局公开数据 | statistical | 国内可通 |
 | `world_bank.py` | 世行数据交叉验证 | statistical（二次验证） | 需翻墙 |
 | `google_factcheck.py` | 已有核查记录检索 | rumor | 需翻墙 |
 | `wayback.py` | 网页历史快照 | web_existence | 需翻墙 |
 | `export_docx.py` | 报告导出 Word（支持传统+灵活模式） | — | 无需网络 |
+
+> `wayback.py` 在正文里还兼任"被墙时的抓取替代入口"（L1b），这是**两种角色同一个工具**：
+> 写报告时按实际用法标注（验证历史快照 / 替代抓取），不要因为工具名而漏标 L1b。
 
 ---
 
@@ -569,59 +600,10 @@ print(json.dumps(result, ensure_ascii=False))
 
 **灵活模式章节类型**：`heading`、`text`、`quote`、`table`、`timeline`、`keyvalue`
 
-#### 调用方式（先写入脚本文件）
+#### 调用方式
 
-```python
-# -*- coding: utf-8 -*-
-import sys
-sys.path.insert(0, r'C:\Users\郑懿宸\.dsh\skills\po-xu-wang\tools')
-from export_docx import export_report, export_report_v2
-
-# 灵活模式 — 适合 compile / timeline 等非核查报告
-report_v2 = {
-    'title': '报告标题',
-    'source_url': '',
-    'source_date': '2026-05-13',
-    'sections': [
-        {'type': 'heading', 'level': 1, 'text': '章节标题'},
-        {'type': 'text', 'text': '段落文本'},
-        {'type': 'quote', 'text': '引用内容', 'attribution': '来源'},
-        {'type': 'table', 'headers': ['列1', '列2'], 'rows': [['a', 'b']]},
-        {'type': 'timeline', 'events': [{'date': '5月8日', 'text': '事件描述'}]},
-        {'type': 'keyvalue', 'pairs': [{'key': '键', 'value': '值'}]},
-    ],
-}
-path = export_report_v2(report_v2, output_dir='D:/AI')
-print(path)
-
-# 传统模式 — 向后兼容，sections 为 dict 时自动使用
-report_v1 = {
-    'title': '事实核查报告',
-    'sections': {
-        'summary': '……',
-        'claims': [{'id': 'F1', 'text': '……', 'type': '可核查事实'}],
-        'verdicts': [{'id': 'F1', 'verdict': '真实', 'reason': '……'}],
-        'evidence': [{'item': '……', 'source': '……', 'link': '……'}],
-        'contradictions': '……',
-        'opinion_analysis': [{'label': 'V1', 'text': '……', 'reasoning': '……', 'conclusion': '……'}],
-        'credibility': {
-            'truth_judgment': '……',
-            'evidence_sufficiency': '……',
-            'coverage_completeness': '……',  # 新增：信息覆盖完整性
-            'limitations': ['……'],
-            'overall': '高',
-        },
-        'methodology': '……',
-        'timestamp': {
-            'report_time': '2026-05-13',
-            'event_time': '2026-05-08 → 2026-05-12',
-            'source_published': '2026-05-08',
-        },
-    },
-}
-path2 = export_report(report_v1, output_dir='D:/AI')
-print(path2)
-```
+见 `tools/export_docx.py` 文件末尾的两段示例（灵活模式 `export_report_v2()` / 传统模式 `export_report()`）——
+示例随代码维护，本文档不再复制一份，避免两处漂移。
 
 #### 使用规则
 
