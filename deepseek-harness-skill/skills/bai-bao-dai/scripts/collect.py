@@ -146,10 +146,16 @@ def run_mediacrawler(platform, event, out_dir, max_posts, wb_cookie, xhs_cookie,
         cmd += ["--cookies", cookie]
 
     print(f"[{platform}] 驱动 MediaCrawler：{' '.join(cmd[:10])} ...")
+    env = os.environ.copy()
+    if platform == "xiaohongshu":
+        # 排序通道决定结果集质量：默认 general（相关度）
+        env.setdefault("MC_XHS_SORT_TYPE", os.environ.get("MC_XHS_SORT_TYPE", "general"))
+        print(f"[xiaohongshu] 搜索排序={env['MC_XHS_SORT_TYPE']}"
+              f"（popularity_descending 会引入大量与事件无关的爆款帖子）")
     try:
         r = subprocess.run(cmd, cwd=MC_DIR, timeout=timeout,
                            capture_output=True, text=True,
-                           encoding="utf-8", errors="replace")
+                           encoding="utf-8", errors="replace", env=env)
     except subprocess.TimeoutExpired:
         print(f"[{platform}] 未采集：MediaCrawler 运行超时（>{timeout}s），可能登录态失效或风控")
         return 2, 0
@@ -267,9 +273,13 @@ def main():
     ap.add_argument("--wb-cookie", default=os.environ.get("BBD_WB_COOKIE", ""), help="微博 cookie（或环境变量 BBD_WB_COOKIE）")
     ap.add_argument("--xhs-cookie", default=os.environ.get("BBD_XHS_COOKIE", ""), help="小红书 cookie（或环境变量 BBD_XHS_COOKIE）")
     ap.add_argument("--with-comments", action="store_true", help="同时采集一级评论（更慢）")
+    ap.add_argument("--sort-type", default="", help="小红书搜索排序：general（默认，相关度）/ popularity_descending（最热，易引入无关爆款）/ time_descending")
     ap.add_argument("--timeout", type=int, default=600, help="外部爬虫单次运行超时（秒）")
     ap.add_argument("--out", default="data/default/raw")
     args = ap.parse_args()
+
+    if args.sort_type:
+        os.environ["MC_XHS_SORT_TYPE"] = args.sort_type
 
     # 一次性登录模式：--login weibo,xiaohongshu
     if args.login:

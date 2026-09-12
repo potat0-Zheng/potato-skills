@@ -42,7 +42,9 @@ description: 百宝袋——热点事件多方信息汇总与视点综合分析�
 
 ### 阶段 1：采集（collect.py）
 
-1. 解析用户输入：提取事件关键词 + 事件 ID（时间戳或短哈希）
+1. 解析用户输入：提取事件关键词 + 事件 ID（时间戳或短哈希），并**同时确定三组检索词**：
+   ① 事件名/热搜原表述；② 中立词（如「长沙 4 岁男童 餐厅 触碰」）；③ 反方词（如「长沙 摸臀风波 女子」）。
+   单用①等于用指控方口径做检索式，立场占比会系统性偏向一侧——三组词都要实跑，清单写入报告方法论章。
 2. **知乎**：先用 WebSearch 定位相关知乎问题链接，再调内嵌爬虫：
    ```bash
    python "{SKILL_DIR}/scripts/collect.py" --event "关键词" --platforms zhihu --url "<知乎问题URL>" --limit 20 --out "data/{event_id}/raw"
@@ -61,20 +63,42 @@ description: 百宝袋——热点事件多方信息汇总与视点综合分析�
    - **MediaCrawler 配置无需手动调整**：collect.py 每次调用自动注入平台/登录方式/关键词/输出路径/条数/headless/评论开关等全部参数；`.env`、数据库、代理配置与本 skill 用法无关
    - **无凭证不静默**：collect.py 明确输出"`[平台] 未采集：<原因>`"并返回非 0；驱动失败（登录态失效/风控）同样标记并在报告中注明
 
-### 阶段 2：归一化 + 事实还原（normalize.py + check.py）
+### 阶段 2：归一化 + 语料治理 + 事实还原（normalize.py + relevance_gate.py + check.py）
 
-1. 归一化：
+1. 归一化（**必须带事件时间窗**）：
    ```bash
-   python "{SKILL_DIR}/scripts/normalize.py" --in "data/{event_id}/raw" --out "data/{event_id}/normalized/data.jsonl" --event "关键词"
+   python "{SKILL_DIR}/scripts/normalize.py" --in "data/{event_id}/raw" \
+       --out "data/{event_id}/normalized/data.jsonl" --event "关键词" \
+       --since 2026-08-26 --until 2026-09-10
    ```
-   （自动识别知乎 md 与 MediaCrawler 微博/小红书 jsonl；知乎回答含发布时间与回答链接）
-2. 事实还原（核心方法论，沿用破虚妄思路）：
+   - `--since/--until` 是**必填语义**（事件起点 / 信息截止）。规则：帖文/回答按自身时间；评论按**自身时间**，
+     时间缺失时继承父帖时间；**父帖越窗则评论一并剔除**（不允许"父帖相关"就把评论留在语料里）。
+     越窗记录另存 `normalized/data.prewindow.jsonl`（背景语境，**不得**并入分析语料）。
+   - 知乎解析：只有带元信息行（回答者ID/赞同数/回答链接）的 `## ` 块才算回答；回答正文里自带的二级标题
+     会并入上一条，**不再切成多条记录**（此前一篇回答被切成 11 条、作者/id 都是小标题）。
+   - （v0.3 起：评论记录的平台按来源文件路径回填；保留 `parent_id` 供评论随父帖与引用回指。）
+2. 语料治理（**必须走脚本，不得现写一次性脚本**）：
+   ```bash
+   python "{SKILL_DIR}/scripts/relevance_gate.py" --in "data/{event_id}/normalized/data.jsonl" \
+       --out "data/{event_id}/normalized/data.relevant.jsonl" \
+       --excluded "data/{event_id}/normalized/excluded.jsonl" \
+       --strong "事件强特征词,…" --weak "弱特征词,…" --min-hits 1 --json
+   ```
+   - **产物文件名固定**：`normalized/data.relevant.jsonl`（留下的）+ `normalized/excluded.jsonl`（剔除的）。
+     装配端 `build_report.py` 会自动读取前者并给出「原始 → 按分析口径」的口径；不得改用别的文件名。
+   - 判定规则：帖文按正文特征词；**评论一律随父帖**（中文评论全靠「她/这孩子」指代，逐条判必然误杀）；
+     知乎回答恒相关（采集端按问题 URL 抓取，相关度由问题保证，回答又短又口语，用关键词判会大批误杀）。
+   - 脚本输出的 `dropped/dropped_pct/dropped_by_platform/dropped_by_type/dropped_reasons`
+     **必须原样写进覆盖声明**（剔除量、占比、构成），剔除占比 >30% 时同时写进摘要——门禁 G8 会查。
+3. 事实还原（核心方法论，沿用破虚妄思路）：
    - 从采集内容 + WebSearch 提取关键事实断言
    - 调 check.py 标准化：
      ```bash
      python "{SKILL_DIR}/scripts/check.py" --event "关键词" --claims "断言1,断言2,..." --out "data/{event_id}/facts.json"
      ```
    - **由 LLM 结合多源证据逐条裁决并回填 facts.json**：每条断言 verdict 取 真实/部分真实/失实/证据不足，同时写入 verdict_source（llm_websearch / china_sources+llm / manual）与 verified_by/verified_at，保证"事实还原"可复现、可追溯；未裁决的断言保持"待核查"，不得伪装成已核查（check.py 只做初查、不产终裁）；每条断言可附 `evidence_level`（1=官方文件/本人账号原文 · 2=权威媒体全文 · 3=转载引文 · 4=搜索摘要/标题层）——verdict 为「真实」且证据等级为 3/4 时，报告显示为「报道属实（原文未核）」（展示降级，facts.json 语义不变，见 CONTRACT-joint）
+   - **一条断言只承载一个可独立裁决的主张**：不得把强弱悬殊的从句（如"另有媒体称 X，且校方未回应"）并进同一条，
+     否则强项会被弱项拖成「证据不足」。否定性从句（未见/未回应）若确需保留，单独登记。
    - **降级说明**：本技能可独立使用。若本机未安装 po-xu-wang skill，check.py 自动输出"待核查"（china_sources=False），由 LLM 直接用 WebSearch 完成多源核查——不影响流水线其余环节
 
 ### 阶段 3：舆论把握（opinion.py）
@@ -86,17 +110,76 @@ description: 百宝袋——热点事件多方信息汇总与视点综合分析�
      "反对方B": ["关键词3", "关键词4"]
    }
    ```
-2. 聚类（单标签：命中关键词最多者胜，平票按词典插入顺序，无命中归"无关/其他"）：
+2. 聚类（单标签：命中关键词最多者胜，平票按词典插入顺序，无命中归**未识别**层）。**v0.3 起为四层口径**：
+   `A 个人表达样本`（命中词典者，**立场占比的分母**）· `B 机构/媒体帖`（信息供给，不进分母）·
+   `C 未识别残差`（另出诊断与分段）· `D 语料治理剔除噪声`（由 relevance_gate 的剔除量给出）：
    ```bash
-   python "{SKILL_DIR}/scripts/opinion.py" --in "data/{event_id}/normalized/data.jsonl" --out "data/{event_id}/opinion.json" --event "关键词" --stances "data/{event_id}/stances.json"
+   python "{SKILL_DIR}/scripts/opinion.py" --in "data/{event_id}/normalized/data.relevant.jsonl" \
+       --out "data/{event_id}/opinion.json" --event "关键词" \
+       --stances "data/{event_id}/stances.json" --rules "data/{event_id}/opinion_rules.json"
    ```
-3. **词典质量门禁（每次聚类后检查；不达标仅允许修订词典并重跑一次）**：
-   - **覆盖度**：检查 opinion.json 中「无关/其他」的占比（stance_distribution 或 opinion.md 标题）。若 **> 30%**，依据该立场下 top_samples 提炼漏掉的立场或关键词，更新 `stances.json` 后重跑步骤 2（**至多一次**；重跑后仍超阈值则如实写入报告「覆盖完整性声明」，不得靠扩大词典硬压占比）；
+   - **「未识别」不等于「无关」**（v0.4 改名）：它的判据只是"立场词零命中"；相关性上游已判过。
+     报告里禁止再写「无关/其他」（门禁 G10）。
+   - **两个覆盖率都要披露**：`coverage_rate` = A / 全部语料（保守下界）；`coverage_of_judgeable` =
+     A / 可判集合（= A + 规则层独有 + 未分类段）。只给前者会把覆盖率系统性压低，因为分母里含几百条
+     本就不含立场表达的反应/玩梗/轶事。
+   - **未识别必须分段披露**：`residual.composition` 给"纯反应 / 原样转述 / 未分类（待抽样人工核）"。
+     **不得把未分类段写成"不含立场表达"** ——那需要语义判断，只能靠抽样人工核；未核之前既不能当噪声，
+     也不能画进占比。
+   - **为什么分层**：机构帖是信息供给方而非舆论主体，把「报道了某立场」当成「持某立场」，会让「高赞代表」被媒体转述帖占满；
+     把「未识别」当成一个立场画进图表，则是把方法缺陷当数据结论。`--no-split` 可退回旧单层行为。
+   - **B 层只按账号名机构特征词判定**（不再用"报道用语 + 话题标签"）——话题标签是普通网友也用得极多的写法，
+     该规则会把网友长帖误判为机构帖、污染分母。删规则优于调词表。
+   - **样本可溯源**：每条 top_sample 带 `platform/id/url/ref_url`；`ref_url` 由脚本解析——自身 URL 优先，
+     微博/小红书评论无独立永久链接时**回指其父帖**。装配端据此自动为高赞代表挂号引用。
+   - **残差诊断**：`residual.diagnostics` 含高频 n-gram、与立场词表的差集、按点赞**中位段**抽样（不用高赞：高赞多为媒体帖，代表性最差）。
+2b. **规则层（口语判据，v0.4，可选但强烈建议）**：另写 `data/{event_id}/opinion_rules.json`：
+   ```json
+   {"立场名": {"positive": ["词"], "patterns": ["正则"]}, "noise_patterns": ["^纯表情/求链接等"]}
+   ```
+   - **为什么需要**：中文 UGC 表态的主流写法是「复述动作 + 价值判断」（"她揪着孩子脖子一分钟" + "就是霸凌"），
+     **一个标签词都不含**。只靠标签词表，这类表达整批落进"未识别"——实测 702 条未识别里，单靠事件口语
+     特征词就能再判出约 100 条。
+   - **纪律**：规则层与词典层**并列不合并**（词典层是可复现下界，规则层是上界）；
+     **正则判不了立场**——实测误判率约 2–3 成（把"三岁儿子手肘碰到女士"判成儿童边界议题、
+     把"调解失败"的事实复述判成质疑基层）。因此规则层**必须抽样人工核（每立场 10 条）并写出误判率**
+     回填 `rule_layer.status/precision`；未抽检时只读作**占比上界**，不得单独下结论。
+3. **人工抽检（引用前必做，v0.4；脚本 `scripts/spotcheck.py`）**——三种核，逐条判读后回填，脚本算率：
+
+   ```bash
+   # ① 生成判读单（固定 seed，任何人可复现同一批样本）
+   python "{SKILL_DIR}/scripts/spotcheck.py" --kind stance       --in normalized/data.relevant.jsonl \
+       --opinion opinion.json --out data/{event_id}/spotcheck_stance.json --make --n 10
+   python "{SKILL_DIR}/scripts/spotcheck.py" --kind rule         --in ... --opinion ... --out .../spotcheck_rule.json --make --n 10
+   python "{SKILL_DIR}/scripts/spotcheck.py" --kind unclassified --in ... --opinion ... --out .../spotcheck_unclassified.json --make --n 30
+   # ② 人工逐条判读（判读单同时输出 .md：人读填 → 结论写回 .json 的 items）
+   # ③ 计算（逐条必须填完，缺项即失败，不产出部分结果）
+   python "{SKILL_DIR}/scripts/spotcheck.py" --kind stance --in ... --opinion ... --out ... --apply
+   ```
+
+   - **判读口径（可被否决，但必须写清）**：`对` = 这条确实属于所标立场；`错` = 不属于。
+     未分类核：`has_stance` = 这条含不含立场表达，含则在 `stance` 里写立场名。
+   - **`--apply` 会自动回写 `opinion.json` 的 `spotcheck` 字段**，装配端据此渲染「人工抽检结果」小节，
+     门禁 G11 据此校验；不跑抽检时报告只能把占比标为"未校正"。
+   - **误判率 >30% 的立场不得作为主结论呈现**；未分类核给出"含立场表达"的估计与 95% 区间，
+     并据此说明占比被低估了多少。
+   - **三种核各自的作用**：stance 核校正**确定性**（这个标签靠不靠得住）、rule 核校正**上界**
+     （正则只能命中"像"某立场的表述，实测误判率 3 成上下）、unclassified 核回答**漏了多少**。
+4. **归类覆盖率门禁（每次聚类后检查；不达标先修订词典重跑，最多一次）**：
+   - **覆盖率与残差**：读 `opinion.json` 的 `coverage_rate`（A 层占相关语料比例）与 `residual.split`。
+     覆盖率 **< 70%**（即未归类 > 30%）时，**依据 `residual.diagnostics` 而非 top_samples** 提炼漏掉的关键词：
+     `grams_outside_vocabulary` 给出「残差高频词 − 立场词表」的差集，是补词典候选；top_samples 是高赞样本，
+     高赞恰多为媒体转述帖，按其补词方向是反的。更新 `stances.json` 后重跑步骤 2（**至多一次**）；
+   - **"至多一次"是防反复调参，不是方法上限**：词典重跑用尽后若覆盖率仍不达标，**允许换方法**——
+     对残差做分层抽样人工标注（`grams_outside_vocabulary` 分层抽 30–50 条），产出一份**标注层**并列呈现。
+     但标注层必须显式标为"人工标注"，**不得混进立场占比冒充统计结果**，也不得据此下"主流/压倒性"类判断（门禁 G7）；
    - **零命中词**：若运行输出「词典质检警告」（df=0 关键词），剔除或改写这些词后重跑步骤 2（**至多一次**）；逐关键词文档频率明细见 opinion.json 的 `dictionary_quality.doc_frequency`；
-   - **禁止以「恢复上一版 / 回滚」名义二次重跑**——「至多一次」修订用尽即停止；修订忌矫枉过正（删净单方措辞会让该立场整体漏入「其他」），对照第一版与修订版分布，两版都失衡时如实披露，而非二选一硬用；
-   - 重跑后「其他」仍 >30%，或某立场被压至 <10% 而人工判断明显与语料不符（如反对方记录被削到个位数），一律如实写入覆盖完整性声明，不得绕行门禁。
-4. **否定/反讽复核（防呆提示）**：opinion.py 会把"命中词被否定词（不/没/未/非/别/莫/无…）紧邻前置修饰"的样本打 `negated` 标记（opinion.json 样本级字段 + opinion.md ⚠ 标记）。LLM 复核时须人工判断这些样本与「无关/其他」高赞样本：真否定/反讽应转标立场或按对立观点处理，复核结论写入 viewpoint.md；**不得把疑似反讽文本直接当立场证据**（聚类不自动改判，仅提示）。
-5. 结合 opinion.md 由 LLM 做**视点综合**：提炼各立场论证结构、标注少数派与对立观点、判断焦点转移（如从"赔偿金额"转向"调解制度"），写入 viewpoint.md
+   - **禁止以"无限重试凑比例"的方式调参**——修订忌矫枉过正（删净单方措辞会让该立场整体漏入「其他」），
+     对照第一版与修订版分布，两版都失衡时如实披露，而非二选一硬用；
+   - 重跑后「其他」仍 >30%（覆盖率 <70%），或某立场被压至 <10% 而人工判断明显与语料不符（如反对方记录被削到个位数），
+     一律如实写入覆盖完整性声明，并按上一条给标注层，不得绕行门禁。
+5. **否定/反讽复核（防呆提示）**：opinion.py 会把"命中词被否定词（不/没/未/非/别/莫/无…）紧邻前置修饰"的样本打 `negated` 标记（opinion.json 样本级字段 + opinion.md ⚠ 标记）。LLM 复核时须人工判断这些样本与「无关/其他」高赞样本：真否定/反讽应转标立场或按对立观点处理，复核结论写入 viewpoint.md；**不得把疑似反讽文本直接当立场证据**（聚类不自动改判，仅提示）。
+6. 结合 opinion.md 由 LLM 做**视点综合**：提炼各立场论证结构、标注少数派与对立观点、判断焦点转移（如从"赔偿金额"转向"调解制度"），写入 viewpoint.md。**"焦点转移/走势"一类结论只能在多日采集下给出**：单一时点采集只能写"各发布日占比"，不得写成舆论演变（CONTRACT-joint §5）。
 
 ### 阶段 4：综合报告（build_report.py）
 
@@ -104,21 +187,30 @@ description: 百宝袋——热点事件多方信息汇总与视点综合分析�
 python "{SKILL_DIR}/scripts/build_report.py" --event "关键词" \
     --title "报告主标题（可含 <em>强调</em>）" --intro "报头一句话导语" \
     --facts "data/{event_id}/facts.json" --opinion "data/{event_id}/opinion.json" \
-    --normalized "data/{event_id}/normalized/data.jsonl" \
+    --normalized "data/{event_id}/normalized/data.relevant.jsonl" \
     --viewpoint "data/{event_id}/viewpoint.md" \
     --coverage "data/{event_id}/coverage.md" \
     --abstract "data/{event_id}/abstract.md" \
     --timeline-milestones "data/{event_id}/timeline.json" \
+    --actors "data/{event_id}/actors.json" \
+    --stance-cards "data/{event_id}/stance_cards.json" \
     --out "data/{event_id}/report.html"
 ```
+（`--normalized` 指向**治理后**的 `data.relevant.jsonl`：装配端据此产出「原始 → 分析」口径、按平台分层收来源，
+KPI 的"分析语料/事件跨度"也以它为准；传 `data.jsonl` 会退回未治理口径并在控制台提示。
+`--actors` 可选：三技能联合任务由 ②揽风云 产出，见「新增约定」与 CONTRACT-joint §8）
 
 **质量门（交付前必跑，0 error 才可交付；自检/装配规范见 `~/.dsh/report-theme/CONTRACT.md`）**：
 ```bash
-python "~/.dsh/report-theme/check_report.py" --strict "data/{event_id}/report.html"
+python "~/.dsh/report-theme/check_report.py" --joint --strict \
+    --data "data/{event_id}" "data/{event_id}/report.html"
 ```
+`--data` 是**数据对账**开关（CONTRACT-joint §10）：不传只能查报告形态，查不出"KPI 数字与时间线矛盾 /
+语料含事件前记录 / 断言说'仅见单条'而语料里有十几条 / 同一指标两个数"这一类问题。联合任务必须带 `--data`。
 LLM 深度内容（`--viewpoint/--coverage/--abstract`）只写 md：md 渲染器支持 GFM 管道表格（自动转 `<table><thead><tbody>`）、加粗、列表、引用，并**自动剥离标题手写序号前缀（「一、/1.」）**；**禁止在 md 里手写 HTML 或让 `<p>| …` 管道行残留**（check E3 会拦截）。
 
 新增约定（v0.2.10）：
+- **主体视角档案（v0.2.18，`--actors` 对象形态）**：由 ②揽风云 产出 `actors.json`（schema 与判据见其 SKILL.md「阶段 6：主体档案」），装配后挂**第二章末**为 h3 小节（CSS 计数器自动编号 x.1），含身份简介卡组 + 主体×**离散阶段**轨道矩阵 + 跨主体交锋带 + 节点编码图例。`claims` 只写断言编号，**裁决词由本脚本从 `--facts` 登记册自动补齐**（不自行判定，见 CONTRACT-joint §8）。`--actors` 传**数组**时仍走旧「角色小词典」（v0.2.6 行为，挂第一章末）。装配后门禁新增 E5（行列数不齐）/ W12（空壳主轴）/ W13（编号不匹配）/ W14（claims 越界）。
 - **事件摘要（ch1，v0.2.16 标签化）**：`.abstract` 用标签化清单 `<dl>`（`dt` 标签列 + `dd` 内容列，≤640px 堆叠）：装配命令 `--abstract` 传**结构化标签式 md**——每个标签单独成段写 `**一句话结论**` 等，其后空行接该标签内容（缺省不渲染）：
   ```markdown
   **一句话结论**
@@ -144,7 +236,7 @@ LLM 深度内容（`--viewpoint/--coverage/--abstract`）只写 md：md 渲染�
 
 报告章节（已实现）：报头（masthead：eyebrow + h1 + intro + 自动数字 hero-figure）→ 结论速览 → 时间线 → 核心事实汇编 → 事实核查结果 → 舆论观点综合（含 LLM 视点分析）→ 来源索引 → 覆盖完整性声明 → 方法论 → 时间戳。**报头说明**：`--title/--intro` 均留空时自动回退（h1=event、无导语）；hero-figure 数字由脚本从采集量/断言/立场自动生成，无需手填。
 
-`--viewpoint/--coverage` 为 LLM 深度内容注入点（markdown 自动转 HTML）；**每章自动带程序化导读行**（数据驱动的导航句；可用 `--intros <json>` 覆盖，键为章节号 1-9 或 appendix）。**可视化（纯 CSS）**：第一章 KPI 仪表盘；可选「事件角色小词典」（`--actors`，折叠卡组，按 side 分组）；第二章可选「说法×证实双轨时间轴」（`--track`，claim/verify 两轨 + 类型徽章）；第四章可选「口径冲突对照」（facts.json 断言可选 `conflicts` 字段）；第五章立场占比条形图 + 焦点转移堆叠条（依赖 opinion.json 新增 `stance_timeline` 字段）；第六章来源/分级小结（`--sources` 条目可选 `grade` 字段）；第七章覆盖缺口三态矩阵。
+`--viewpoint/--coverage` 为 LLM 深度内容注入点（markdown 自动转 HTML）；**每章自动带程序化导读行**（数据驱动的导航句；可用 `--intros <json>` 覆盖，键为章节号 1-9 或 appendix）。**可视化（纯 CSS）**：第一章 KPI 仪表盘；可选「主体视角档案」（`--actors` **对象形态** = 身份简介卡组 + 主体×离散阶段轨道矩阵 + 交锋带，挂第二章末）或「事件角色小词典」（`--actors` **数组形态**，折叠卡组按 side 分组，挂第一章末）；第二章可选「说法×证实双轨时间轴」（`--track`，claim/verify 两轨 + 类型徽章）；第四章可选「口径冲突对照」（facts.json 断言可选 `conflicts` 字段）；第五章立场占比条形图 + 焦点转移堆叠条（依赖 opinion.json 新增 `stance_timeline` 字段）；第六章来源/分级小结（`--sources` 条目可选 `grade` 字段）；第七章覆盖缺口三态矩阵。
 
 ## 独立工具用法（单独取一个工具）
 
@@ -194,11 +286,21 @@ setup.py（静态体检：依赖/凭证是否存在）与 selftest.py（最小�
 ## 强制质量检查项（交付前核对）
 
 1. **对立/少数观点必须显式覆盖**并标注信源稀缺度（防止主流叙事单边化）
-2. **舆论按立场聚类**（非简单正负情感），识别 <10% 的少数派
-3. **覆盖完整性声明**：明确列出未采到的立场/平台/信源（如"家属方未回应""小红书未部署"）
+2. **舆论按立场聚类**（非简单正负情感），识别 <10% 的少数派；**分类标签已按阶段 3 第 3 条抽检**并写出误判率
+3. **覆盖完整性声明**：明确列出未采到的立场/平台/信源（如"家属方未回应""小红书未部署"），
+   **并给出语料治理口径**：原始采集 N 条 → 分析 M 条（剔除 X 条、占比、平台/类型构成）
 4. **事实冲突必须消解**：口径/时间/立场差异分析 + 给出更可信一方
 5. **确定性标记**：▲官方确认 / ●多源一致 / △单源存疑，不确定信息不得伪装成事实
 6. **自检留痕**：若任务前执行过工具自检，报告中注明结果与用户选择（跳过某工具 / 已更新凭证）
+7. **数字一数一源**：报告内同一指标只能有一个数；"原始量/分析量/剔除量"三个口径必须逐处写明是哪一个
+   （`check_report.py --joint --data` 的 R1/R2 会查）
+8. **采集检索词公开**：报告方法论章须列出实际使用的检索词（含中立词/反方词那一组），占比随检索词偏移，读者有权知道检索式
+7. **引用闭环**（v0.3）：时间线节点用 `ref` 字段、断言用 `claims[].ref` / `evidence[].ref`、高赞代表由样本 `ref_url` 自动挂号，
+   三处都必须可点击跳转来源索引；交付前 `check_report.py` 以 W1（双向一致）、W16（高赞代表引用率）、E6（断言可溯源）复核
+8. **口径披露**（v0.3）：立场占比必须与 `coverage_rate`（归类覆盖率）同时呈现，不得只给占比不给分母口径（门禁 G7）；
+   机构帖与未归类残差不得作为一个「立场」进入占比与图表
+9. **立场卡组**（v0.3）：`stance_cards.json` 为阶段②必产工件，卡内只写抽象逻辑链（主张→要件→推论→代价→落点）、
+   **不放引语**（代表性原文归第五章「高赞代表」表）；书写限制见 report-theme「立场卡组书写限制」，超限由 check W15 提示
 
 ## 依赖与凭证
 

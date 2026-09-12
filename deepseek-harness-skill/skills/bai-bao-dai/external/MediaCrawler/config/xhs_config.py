@@ -20,8 +20,15 @@
 
 # Xiaohongshu platform configuration
 
+import os
+
 # Sorting method, the specific enumeration value is in media_platform/xhs/field.py
-SORT_TYPE = "popularity_descending"
+# 可用环境变量 MC_XHS_SORT_TYPE 覆盖（collect.py 会按需注入）。
+# 默认 general（相关度）：popularity_descending（最热）在长尾多词查询下会退化为
+# 「分词宽松匹配 + 热度降序」，把只命中单个词（如"中国""菲律宾"）的无关爆款混入
+# 结果集，且其点赞量级远高于事件相关帖（bai-bao-dai 2026-09 实测：40 条中 29 条无关，
+# 无关记录占小红书点赞量 91%）。故默认改回 general。
+SORT_TYPE = os.environ.get("MC_XHS_SORT_TYPE", "general")
 
 # Specify the note URL list, which must carry the xsec_token parameter
 XHS_SPECIFIED_NOTE_URL_LIST = [
