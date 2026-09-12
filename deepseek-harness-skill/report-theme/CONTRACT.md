@@ -55,7 +55,16 @@
   - 正文引用集合与索引锚点集合必须双向一致（check W1）。
 - 确定性标记（语义固定，勿挪用）：`mark-official`=▲官方确认 / `mark-multi`=●多源一致 / `mark-single`=△单源存疑 / `mark-caution`=警示（如「证据不足」可用，但图例须注明）。
 - 表格：一律带 `<thead>`+`<tbody>`（斑马纹与打印表头依赖它们；check W2 提示缺 thead 的表格）。
+- 引用闭环（v0.3）：时间线节点 `<p class="tl-refs">`（`milestones[].ref`）、断言 `<p class="caption">引用：…</p>`
+  （`claims[].ref` / `evidence[].ref`）、卡组步骤与 `note` 内的 `[N]`、第五章高赞代表由样本 `ref_url` 自动挂号——
+  四处都必须渲染为 `<a href="#refN" class="ref">`，并由 check W1 / W16、联合模式 E6 复核。
 - 章节导读：`<p class="chapter-intro">`；图例 `<p class="legend">`；折叠 `<details class="fold">`。
+- **立场卡组（`.scards` / `--stance-cards`）书写限制**：卡内只写**抽象逻辑链**（主张→要件→推论→代价→落点），
+  **不得放引语**（代表性原文归第五章「高赞代表」表，重复即破版）。
+  - **单步 ≤14 个汉字**（标点计入，引用编号不计），步骤数 3–5 步；引用编号一律不内联，改放卡尾 `.scard-note`
+    行首「证据 [N][N] · …」；`.scard-note` 控制在 2–3 行（约 ≤55 字），各卡长度相近。
+  - 依据：`.ssteps` 为 `flex:1 1 0; min-width:120px` 横向弹性槽，`.scards` 为 `align-items:stretch`；
+    单步超长会换行增高并把全部卡片拉伸到最高卡的高度，产生大片留白。超限由 check **W15** 提示。
 - 数值类文本（KPI/图表/stat-line/正文）应从同一份数据渲染，**不得同一指标两处数字不一致**（如章导读 24 条 vs stat-line 74 条）。
 
 ## 5. report-meta 页脚（新产物必填）
@@ -128,9 +137,14 @@ python "~/.dsh/report-theme/check_report.py" "输出.html"
 | W9 | warning | 断言卡缺 `.claim-title` | 补 `facts.json claims[].short_title` |
 | W10 | warning | 第一章有仪表盘但缺 `.abstract` 摘要 | 补 `.abstract` 摘要（`--abstract` 两段式 或 v0.2.16 标签化 dl 直写） |
 | W11 | warning | 附录下首个标题为 h4（跳级 → `x.0.y`） | 补 h3 或降级为 h3 |
+| E5 | error | 主体轨道网格（`table.rail`）行列数不齐（表头列数 ≠ 数据行 td 数） | 装配端保证每行 td 数 = 阶段列数；手写时核对节点 `col` 不越界 |
+| W12 | warning | 主体轨道网格主轴行（`tr.main`）无节点胶囊 | 补 `nodes` 或降为 `layer: "minor"` |
+| W13 | warning | 主体轨道网格身份卡编号（`.racard-id`）与轨道行编号（`.aid`）不一致 | 两处编号一一对应（A1…An） |
+| W14 | warning | 主体轨道网格 `claims` 引用超出第三章断言数 | 与 `facts.json` 登记册对齐（只引用已登记断言） |
 
 `--strict`：warning 计为失败（交付门禁建议开）；默认仅 error 使退出码非 0。
 
 ## 8. 变更记录
 
 - v1：确立三层契约与写入流程；md 渲染器补表格支持；check_report.py 上线（E1-E4/W1-W8）。
+- v1.1（2026-09，theme-v 0.2.18）：新增**主体轨道网格**组件（`.rail-card / .rail-actors / .racard / table.rail / .rn / .rail-cross / .rn-legend`）与 `--actors` **对象形态**（挂第二章末，h3 自动编号 x.1）；自检规则增 E5 / W12–W14；`--actors` **数组形态** 保持 v0.2.6 行为（角色小词典，挂第一章末）向后兼容；`claims` 裁决词由装配端从 `facts.json` 登记册自动补齐（衔接约束见 CONTRACT-joint §9）。

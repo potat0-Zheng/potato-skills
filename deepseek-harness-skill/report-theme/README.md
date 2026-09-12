@@ -86,17 +86,51 @@ python report-theme/sync_theme.py --check  # 只检查一致性（防漂移）
 | `.abstract`（v0.2.9→v0.2.17） | 事件摘要块（ch1，模型生成）：标签化清单 `dl`（`dt` 标签列衬线加粗 16px + `dd` 内容列无衬线同正文；推荐标签序：一句话结论/事件定性/事实核查/平台采样/舆论主形态/少数派/事件跨度，≤640px 堆叠）；旧两段式 `.abs-label+.abs-txt` 兼容 |
 | 表格 th/td（v0.2.13） | 全局文字水平+垂直居中；md 管道表 `:---` 对齐以行内样式优先 |
 | `.chart-split` / `.donut` / `.donut-legend` / `.trend`（v0.2.13） | 图表双栏（两列、上下居中、≤880 单列）+ 环形图（conic-gradient 百分比直转 deg、mask 掏洞成环，不支持回退实心饼）+ 静态 SVG 趋势折线（.trend-head/网格/折线 .s1-.s4/面积/圆点/图例；坐标由生成端按数据算） |
-| `.scards` / `.scard` / `.ssteps` / `.scard-note`（v0.2.13） | 立场卡组 + 论证链步骤带（自动数字圆点+箭头）；跨卡对齐：卡头两行、节点等高、引用区弹性、防呆齐底 |
+| `.scards` / `.scard` / `.ssteps` / `.scard-note`（v0.2.13） | 立场卡组 + 论证链步骤带（自动数字圆点+箭头）；跨卡对齐：卡头两行、节点等高、防呆齐底。**书写限制**：单步 ≤14 汉字、3–5 步、卡内不放引语、引用编号放卡尾 note 行首（见「立场卡组书写限制」；超限由 check W15 提示） |
+| `.tl-refs`（v0.3 装配端约定） | 时间线节点引用行（`milestones[].ref` → 可点击 `[N]`），纯文字行、无新样式 |
 | `.quote-list` / `.quote-item`（v0.2.13） | 表格/卡内「高赞代表」逐条成块：`.quote-like` 赞数徽章 + `.quote-txt`，条目虚线分隔、窄屏单列 |
 | `.viewpoint-meta` / `.viewpoint-snap`（v0.2.13） | 视点综合信息条（浅纸底陶土左边条）+ 「◷ 动态快照 · 日期」徽章；h3:has(+ .viewpoint-meta) 只调间距不动编号 |
 | `.table-scroll`（v0.2.13） | 长表滚动容器：max-height min(58vh,540px) + 内置滚动 + 吸顶表头；打印自动展开全文 |
 | `.refpop`（v0.2.13） | 引用悬停气泡（装配端 refpop JS 读本页 #refN 索引行自动浮出：来源/标题/类型/分级/查看原文；无 JS 回退纯跳转） |
 | `.stack-seg.s6` / `.stack-legend i.s1–s6`（v0.2.13） | 第 6 立场段色 + 图例色块补色（此前 `<i class="s1">` 无色块、图例透明） |
+| `.rail-card` / `.rail-actors` / `.racard` / `table.rail` / `.rn` / `.rail-cross`（v0.2.18） | **主体轨道网格**（`--actors` 对象形态，挂 ch2 末为 x.1 小节）：`.rail-card` 容器（无边框 + 阴影底座 #f7f5f0）> `.rail-head`（`.rail-title` 左侧陶土竖条 + `.rail-meta` 主体/阶段/跨度/拓扑）+ `.rail-actors`（身份简介卡组：`.racard`（主轴 `.main` 带陶土 inset 色条与陶土阴影）= `.racard-h`（`.racard-id` 编号徽章 + `.racard-n` 名称）+ `.racard-r` 角色行 + `.racard-b` 身份简介 + `.racard-claims` 主张 #N）+ `table.rail`（行=主体、列=**离散阶段**；`th .rg` 日期区间、`td.rail-actor` 内 `.aid` 编号 + `.sub` 角色、`td.cell` 内节点胶囊 `.rn.<kind>`、活跃列 `td.hot`）+ `.rail-cross` 交锋带）；`.rn` 类型编码 act ●官方行动 / decl ▲声明·发布 / view ○表态·被指 / judge ◈裁决 / quiet ┄静默（虚线）；编号 `.aid` ↔ `.racard-id` 一一对应 |
 | 响应式 / 无障碍 / 打印 | 880px/640px 断点、reduced-motion、打印分页（h2 分页 + 表格防拆分 + 表头重复；目录栏/时间轴打印降级） |
+
+## 立场卡组书写限制
+
+`.ssteps` 是 `flex: 1 1 0; min-width: 120px` 的横向弹性槽，`.scards` 是 `align-items: stretch` 的等高网格。
+两者叠加的后果是：**单步文字一长就换行增高，最短的卡被拉伸到与最高卡等高，底部留大片空白**。
+按 ≥300px 卡宽（`minmax(min(300px,100%),1fr)`）反算——两步一行、每步可用文字宽约 75px、字号 11.5px、
+行高 1.5——单步文字的安全上限约为：
+
+| 项 | 限制 | 说明 |
+| --- | --- | --- |
+| 单步字数 | **≤14 个汉字**（标点计入、引用编号不计） | 每行约 6 字，2 行内不增高 |
+| 步骤数 | 3–5 步 | 5 步在窄卡下占 3 行，已接近上限 |
+| 引用编号 | 不内联在步骤内 | 3 个 chip 约吃掉 42px；统一放卡尾 `.scard-note` 行首「证据 [N][N] · …」 |
+| 卡尾 note | 2–3 行（约 ≤55 字） | 各卡长度相近，避免跨卡等高留白 |
+| 引语 | **卡内不放** | 代表性原文归第五章「高赞代表」表；放进卡内即与该表逐条重复 |
+
+超限由 `check_report.py` 的 **W15** 提示（`--strict` 下计为失败）。同族限制见 CONTRACT.md §4 与主模板 `.scards` 注释。
+
+## 装配端新增输入（v0.3，皮肤无变更）
+
+`theme-v` 保持 0.2.18（本轮仅新增装配约定与校验规则，未改 CSS）：
+
+| 输入 | 位置 | 说明 |
+| --- | --- | --- |
+| `ref` | `timeline.json` 各节点 | 引用编号串（如 `"[1][5]"`）→ `.tl-refs` 行 |
+| `ref` | `facts.json` `claims[]` / `evidence[]` | 合并去重后渲染「引用：」行 |
+| `ref_url` / `platform` / `id` | `opinion.json` 各 `top_samples[]` | 装配端解析为 `[N]` 并优先收录进来源索引 |
+| `coverage_rate` / `denominator` / `residual` / `institutional_layer` | `opinion.json` | 渲染第五章口径统计行（占比与覆盖率并列） |
+| `like_pct` | `opinion.json` 各立场 | 第五章表格「赞同占比」列 |
+
+校验新增：**E6** 断言可溯源 · **G7** 占比须披露归类覆盖率 · **W15** 卡组书写超限 · **W16** 高赞代表缺引用。
 
 ## 版本与演进
 
-- **v0.2.17（当前）**：摘要排版细节——`.abstract` 的 `dt` 标签由等宽灰字改为**衬线加粗（16px/600，与正文同字号，同 `.claim-title` 类小标题体系）**、`dd` 内容由衬线 15.5px/两端对齐改为**无衬线 16px/行高 1.72 与正文一致**（去两端对齐）；标签与内容首行基线自然对齐，摘要块字体与整篇正文/小标题体系协调一致。
+- **v0.2.18（当前）**：**主体轨道网格**（`--actors` v2 对象形态）——新增 `.rail-card / .rail-head / .rail-actors / .racard / table.rail / .rn / .rail-cross / .rn-legend` 组件族，把「主体视角」做成报告的第二认知轴：**身份简介卡组**（谁是谁 + 在事件中的位置）+ **主体×离散阶段轨道矩阵**（谁在何时做了什么）+ **跨主体交锋带**（指控→否认→悬置的关系序列）+ 节点类型编码（act/decl/view/judge/quiet，静默显式登记）。关键设计：**列取离散阶段而非时间比例** → 跨度悬殊（20 年历史背景 vs 1 天爆发）不失真；无边框设计（#f7f5f0 底座 + 阴影层次，主轴卡用陶土 inset 色条与陶土阴影分层）。配套：`build_report.py` 新增 `_actors_rail_html()`（`--actors` 分流：对象→轨道网格挂 ch2 末 / 数组→旧角色小词典挂 ch1 末，向后兼容），`claims` 裁决词从 `facts.json` 登记册自动补齐（CONTRACT-joint §9）；`check_report.py` 新增 E5 / W12–W14；`lan-feng-yun` SKILL.md 新增「阶段 6：主体档案」方法节；`CONTRACT-joint` 增 §9 并 bump `contract=joint-v0.2`。
+- **v0.2.17**：摘要排版细节——`.abstract` 的 `dt` 标签由等宽灰字改为**衬线加粗（16px/600，与正文同字号，同 `.claim-title` 类小标题体系）**、`dd` 内容由衬线 15.5px/两端对齐改为**无衬线 16px/行高 1.72 与正文一致**（去两端对齐）；标签与内容首行基线自然对齐，摘要块字体与整篇正文/小标题体系协调一致。
 - **v0.2.16**：摘要标签化——ch1 事件摘要块 `.abstract` 由「两段式散文」改为「标签化清单」：`.abstract dl` 两列（`dt` 标签列等宽 mono + `dd` 内容列衬线正文，≤640px 堆叠单列、组间留白）；推荐标签序：一句话结论 → 事件定性 → 事实核查 → 平台采样 → 舆论主形态 → 少数派 → 事件跨度（标签按报告类型可增减，dd 长文可再分 p）；新增 `.abs-foot` 注脚（"模型生成·以各章为准"）。旧 `.abs-label/.abs-txt` 两段式样式保留兼容（生成器 `--abstract` 自动识别：结构化标签式 md → dl 行；旧两段式 → 段落）。
 - **v0.2.15**：根治右空——正文段落移除独立 `max-width`（不再 72ch/56em 限宽），行宽跟随 `.wrap` 容器满排，消除段落右缘与标题/表格不齐的右侧空白。
 - **v0.2.14**：正文段落试以 56em≈896px 限宽（已被 v0.2.15 取代）。

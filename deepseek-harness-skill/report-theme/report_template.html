@@ -4,9 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><!-- TITLE --></title>
-<!-- theme-v: 0.2.17 -->
+<!-- theme-v: 0.2.18 -->
 <!-- 本文件由 sync_theme.py 从 ~/.dsh/report-theme/ 同步分发。请勿手工修改各 skill 内的副本；
      修改皮肤请改主模板 report-theme/report_template.html，然后运行 report-theme/sync_theme.py。 -->
+<!-- v0.2.18 主体轨道网格（--actors v2 对象形态）：新增 .rail-card / .rail-head / .rail-actors / .racard / table.rail / .rn / .rail-cross / .rn-legend 组件族
+     = 身份简介卡组 + 主体×离散阶段轨道矩阵 + 跨主体交锋带。列取离散阶段而非时间比例 → 跨度悬殊（20 年 vs 1 天）不失真；
+     行首 .aid 编号与身份卡 .racard-id 一一对应；节点类型编码 act ●官方行动 / decl ▲声明发布 / view ○表态·被指 / judge ◈裁决 / quiet ┄静默。
+     --actors 传数组时仍走旧「角色小词典」渲染（向后兼容，v0.2.6 行为不变）。 -->
 <!-- v0.2.17 摘要排版细节：dt 标签改正文同族衬线加粗（16px/600，同 .claim-title 类小标题）、
      dd 内容改无衬线 16px 行高 1.72 与正文一致（取消两端对齐与衬线 15.5px），标题/内容基线自然对齐，字体协调。 -->
 <!-- v0.2.16 摘要标签化（ch1 事件摘要块）：.abstract 由两段式散文改为标签化清单 dl（dt 标签列 + dd 内容列；
@@ -149,7 +153,7 @@
   tr[id^="ref"] td:first-child { font-family: var(--mono); color: var(--gray-500); white-space: nowrap; }
 
   /* 长表滚动容器（v0.2.13）：固定高度 + 内置滚动 + 吸顶表头；打印时自动展开全文 */
-  /* 用法：把超长表格包在 <div class="table-scroll">…</div> 内（如第六章来源索引这类超长表） */
+  /* 用法：把超长表格包在 <div class="table-scroll">…</div> 内（如第七章来源索引这类超长表） */
   .table-scroll { max-height: min(58vh, 540px); overflow-y: auto; border: 1px solid var(--gray-200); border-radius: var(--radius); background: var(--paper); }
   .table-scroll table { margin: 0; }
   .table-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--oat); box-shadow: 0 1px 0 var(--gray-200); }
@@ -299,9 +303,17 @@
   @media print { .viewpoint-meta { break-inside: avoid; } }
 
   /* ═══════════════════ 立场卡组 + 论证链带（v0.2.13，视点综合 5.1.2 结构可视化） ═══════════════════ */
-  /* 把连续长段落式「各立场论证」拆成卡：卡头(名+占比+视角) / 论证链 .ssteps / 原文 / 防呆 note
+  /* 把连续长段落式「各立场论证」拆成卡：卡头(名+占比+视角) / 论证链 .ssteps / 防呆 note
      跨卡对齐策略：卡等高 + 卡头固定两行（行1 名+占比、行2 视角）+ 论证链节点 min-height 等高
-     + 引用区 .quote-list 弹性伸展吸收高度差 → 「代表性原文」标签与「防呆 note」跨卡对齐 */
+     + 引用区 .quote-list 弹性伸展吸收高度差 → 「代表性原文」标签与「防呆 note」跨卡对齐
+     ⚠ 立场卡组书写限制（超限即破版，check W15 提示）：.ssteps 是 flex:1 1 0 / min-width:120px 的
+     横向弹性槽，.scards 又是 align-items:stretch——单步文字一长就换行增高，最短的卡会被拉伸到与
+     最高卡等高、底部留大片空白。按 ≥300px 卡宽反算（两步一行、每步可用文字宽约 75px、字号 11.5px）：
+       · **单步 ≤14 个汉字**（标点计入、引用编号不计），步骤数 3–5 步（5 步在窄卡下已占 3 行）；
+       · 引用编号**不要内联在步骤内**（3 个 chip 即吃掉约 42px），统一放卡尾 .scard-note 行首写
+         「证据 [N][N] · …」；
+       · .scard-note 控制在 2–3 行（约 ≤55 字），各卡长度相近，避免跨卡等高留白；
+       · 卡组**不放引语**：代表性原文归第六章「高赞代表」表，放进卡内即与该表重复。 */
   .scards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 18px; margin: 1.2em 0; align-items: stretch; }
   .scard { display: flex; flex-direction: column; padding: 16px 16px 12px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); background: var(--paper); }
   /* 卡头：两行网格（名+占比 一行、视角 一行），各行起点跨卡一致 */
@@ -344,6 +356,78 @@
   table.dualtrack th:nth-child(1) { width: 15%; }
   table.dualtrack td { vertical-align: top; }
   table.dualtrack td.cell-verify { background: #f6f4ee; }
+
+  /* ═══════════════════ 主体轨道网格 Actor Rail Grid（--actors v2 对象形态；纯 CSS 零 JS） ═══════════════════ */
+  /* 结构：.rail-card > .rail-head(.rail-title/.rail-meta) + .rail-actors(> .racard 身份卡) + table.rail(主体×阶段) + .rail-cross(交锋带)
+     数据：actors.json v2 = {stages:[{name,span,hot}], actors:[{name,role,layer,bio,nodes:[{col,date,text,kind}],claims,ref,credibility}], cross:[{from,rel,to,tag}]}
+     普适性：列 = 离散阶段（非时间比例），主体数/稀疏度/跨度/拓扑变化均不崩；行首 .aid 与身份卡 .racard-id 对应 */
+  .rail-card { margin: 1.5em 0; padding: 20px 22px 16px; border: none; border-radius: var(--radius); background: #f7f5f0;
+               box-shadow: 0 2px 6px rgb(20 20 19 / 5%), 0 14px 36px rgb(20 20 19 / 9%); }
+  .rail-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 14px; padding-bottom: 9px; border-bottom: 1.5px solid var(--gray-100); }
+  .rail-title { font-family: var(--serif); font-size: 19.5px; font-weight: 700; color: var(--slate); letter-spacing: .01em; }
+  .rail-title::before { content: ""; display: inline-block; width: 4px; height: 17px; margin-right: 9px; border-radius: 2px; background: var(--clay); vertical-align: -2px; }
+  .rail-meta { font-family: var(--mono); font-size: 10.5px; color: var(--gray-500); letter-spacing: .02em; }
+  /* 身份简介卡组（编号 A1/B1/C1… 与轨道行 .aid 一一对应） */
+  .rail-actors { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 12px; margin: 0 0 16px; }
+  .racard { padding: 12px 14px 11px; border: none; border-radius: 12px; background: var(--paper);
+            box-shadow: 0 1px 2px rgb(20 20 19 / 6%), 0 6px 16px rgb(20 20 19 / 9%);
+            transition: transform 160ms ease, box-shadow 160ms ease; }
+  .racard:hover { transform: translateY(-2px); box-shadow: 0 2px 6px rgb(20 20 19 / 8%), 0 14px 28px rgb(20 20 19 / 13%); }
+  .racard.main { padding-left: 16px; background: linear-gradient(180deg, #fdf6f2 0%, var(--paper) 64%);
+                 box-shadow: inset 4px 0 0 var(--clay), 0 2px 4px rgb(176 87 59 / 14%), 0 8px 20px rgb(176 87 59 / 16%); }
+  .racard.main:hover { box-shadow: inset 4px 0 0 var(--clay), 0 3px 8px rgb(176 87 59 / 18%), 0 16px 32px rgb(176 87 59 / 20%); }
+  .racard-h { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+  .racard-id { flex: none; padding: 1px 6px 2px; border-radius: 5px; font-family: var(--mono); font-size: 9.5px; font-weight: 700;
+               letter-spacing: .06em; color: var(--paper); background: var(--clay); }
+  .racard:not(.main) .racard-id { background: var(--gray-500); }
+  .racard-n { font-family: var(--serif); font-size: 14.5px; font-weight: 700; color: var(--slate); line-height: 1.3; letter-spacing: .01em; }
+  .racard-r { display: block; margin-bottom: 6px; font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .04em; color: var(--clay); }
+  .racard:not(.main) .racard-r { color: var(--gray-700); }
+  .racard-b { margin: 0; font-size: 12px; line-height: 1.62; color: var(--gray-700); }
+  .racard-claims { margin: 7px 0 0; padding-top: 6px; border-top: 1px dashed var(--gray-100); font-family: var(--mono); font-size: 10.5px; color: var(--gray-500); }
+  .racard-claims a { color: var(--clay); text-decoration: none; }
+  .racard-claims .v { margin-left: 3px; }
+  /* 轨道矩阵：行 = 主体，列 = 离散阶段；轨道线由 td.cell::before 贯穿，节点胶囊浮于其上 */
+  table.rail { width: 100%; font-size: 12.5px; table-layout: fixed; }
+  table.rail th, table.rail td { text-align: left; vertical-align: middle; padding: 6px 8px; }
+  table.rail thead th { font-family: var(--sans); font-size: 11.5px; line-height: 1.4; vertical-align: top; }
+  table.rail thead th .rg { display: block; margin-top: 2px; font-family: var(--mono); font-size: 9.5px; font-weight: 400; color: var(--gray-500); }
+  table.rail th.rail-actor { width: 16%; }
+  table.rail td.rail-actor { font-family: var(--serif); font-size: 14px; font-weight: 700; color: var(--slate); line-height: 1.4; }
+  table.rail td.rail-actor .sub { display: block; margin-top: 2px; font-family: var(--mono); font-size: 9.5px; font-weight: 400; color: var(--gray-500); }
+  table.rail td.rail-actor .aid { display: inline-block; margin-right: 5px; padding: 0 5px 1px; border-radius: 4px;
+                                  font-family: var(--mono); font-size: 9px; font-weight: 700; color: var(--paper); background: var(--clay); }
+  table.rail tr.main td.rail-actor { padding-left: 11px; box-shadow: inset 4px 0 0 var(--clay); }
+  table.rail tr:not(.main) td.rail-actor .aid { background: var(--gray-500); }
+  table.rail td.cell { position: relative; }
+  table.rail td.cell::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: var(--gray-100); }
+  table.rail td.hot::before { background: var(--oat); }
+  table.rail td.hot { background: rgb(176 87 59 / 4%); }
+  /* 节点胶囊（kind 类型编码，零 JS 纯 CSS 形状区分） */
+  .rn { position: relative; z-index: 1; display: inline-block; margin: 2px 5px 2px 0; padding: 3px 8px; border-radius: 999px;
+        font-family: var(--mono); font-size: 11px; font-weight: 500; line-height: 1.55; background: var(--paper);
+        border: 1.5px solid var(--gray-200); color: var(--gray-700); box-shadow: 0 1px 2px rgb(20 20 19 / 5%); }
+  .rn::before { margin-right: 3px; }
+  .rn.act { border-color: var(--clay); color: #a44a2e; background: #fdf6f2; }
+  .rn.act::before { content: "●"; }
+  .rn.decl { border-color: #8a6512; color: #8a6512; background: #fdf9ef; }
+  .rn.decl::before { content: "▲"; }
+  .rn.view { border-color: var(--gray-200); color: var(--gray-500); background: var(--gray-50); }
+  .rn.view::before { content: "○"; }
+  .rn.judge { border-color: #55693f; color: #55693f; background: #f4f7ec; }
+  .rn.judge::before { content: "◈"; }
+  .rn.quiet { border-style: dashed; color: var(--gray-500); background: transparent; }
+  .rn.quiet::before { content: "┄"; }
+  /* 交锋带：跨主体关系降维为序列（不画连线，避免拓扑/坐标成本） */
+  .rail-cross { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 14px; padding: 10px 14px;
+                background: var(--paper); border-radius: 8px; font-size: 12.5px; color: var(--gray-700);
+                box-shadow: inset 3px 0 0 var(--clay), 0 1px 2px rgb(20 20 19 / 5%); }
+  .rail-cross b { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; color: var(--gray-500); }
+  .rail-cross .rel { font-family: var(--mono); font-size: 10.5px; color: var(--clay); }
+  .rn-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: .8em 0 0; font-family: var(--mono); font-size: 10.5px; color: var(--gray-500); }
+  @media (max-width: 880px) { table.rail { table-layout: auto; } }
+  @media (max-width: 640px) { .rail-actors { grid-template-columns: 1fr; } table.rail { font-size: 12px; } }
+  @media print { .rail-card, .racard { box-shadow: none !important; } .racard:hover { transform: none !important; } }
 
   /* 图像（预留，与 v0.1 兼容） */
   .img-card { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 1em; margin: 1em 0; background: var(--paper); }
@@ -497,7 +581,9 @@
      - 视点综合（v0.2.13）：h3 标题后紧跟 .viewpoint-meta 信息条（.viewpoint-snap 徽章「动态快照 · 日期」+ 一句说明）即视为视点综合小节；h3 保持 <main> 直接子级以保留自动编号（h3:has(+ .viewpoint-meta) 只调间距不动编号）；LLM --viewpoint md 注入时置于该节正文前
      - 表格内「高赞代表」条目（v0.2.13）：cell 内用 .quote-list > .quote-item（.quote-like 点赞徽章 + .quote-txt 正文），多条自动虚线分隔、窄屏单列——替代「[赞N] 文字；[赞M] 文字」糊成一团的写法
      - 立场卡组 + 论证链带（v0.2.13，视点综合 5.1.2）：.scards > .scard（.scard-head 名/占比 pill/视角 + .ssteps 论证链步骤节点带（自动数字圆点+箭头）+ .scard-label + 原文 .quote-list + .scard-note 防呆）；结构化代替「1. 立场名：长段…2. …」连排；语义细节（反讽/少数派警示）保留在卡内文字
-     - 长表滚动容器 .table-scroll（v0.2.13）：包住超长表（如第六章来源索引）→ 固定高度 + 内置滚动 + 吸顶表头（<div class="table-scroll"><table>…</table></div>）；打印时自动展开全文
+     - 主体轨道网格（v0.2.18，--actors v2 对象形态；build_report 程序化输出，亦可手写）：<div class="rail-card"><div class="rail-head"><span class="rail-title">主体视角：各方行动链与主张</span><span class="rail-meta">主体 N · 阶段 M · 跨度…</span></div><div class="rail-actors"><div class="racard main"><div class="racard-h"><span class="racard-id">A1</span><span class="racard-n">主体名</span></div><span class="racard-r">角色 · 主轴</span><p class="racard-b">身份简介</p><p class="racard-claims">主张 <a href="#ch3">#1</a><span class="v v-true">真实</span></p></div>…</div><table class="rail"><thead><tr><th class="rail-actor">主体 · 角色</th><th>阶段名<span class="rg">日期区间</span></th>…</tr></thead><tbody><tr class="main"><td class="rail-actor"><span class="aid">A1</span>主体名<span class="sub">角色</span></td><td class="cell"><span class="rn act">08-28 动作</span></td>…</tr></tbody></table><div class="rail-cross"><b>交锋带</b><span>甲</span><span class="rel">指控 →</span><span>乙</span></div></div> + <p class="rn-legend">●官方行动 ▲声明·发布 ○表态·被指 ◈裁决 ┄静默</p>
+       要点：列 = 离散阶段（非时间比例，跨度悬殊不失真）；行首 .aid 编号与身份卡 .racard-id 一一对应；主轴行 class="main"（左侧陶土色条），活跃列 td.hot；节点类 .rn.act/.decl/.view/.judge/.quiet；无边框设计（底色 #f7f5f0 底座 + 阴影层次）。
+     - 长表滚动容器 .table-scroll（v0.2.13）：包住超长表（如第七章来源索引）→ 固定高度 + 内置滚动 + 吸顶表头（<div class="table-scroll"><table>…</table></div>）；打印时自动展开全文
      - 引用悬停气泡卡 .refpop（v0.2.13）：正文 a.ref（href="#refN"）悬停/聚焦时由装配端 refpop JS 读取本页 #refN 索引行浮出来源卡（来源/标题/类型/分级/原文链接）；正文与索引表零改动，无 JS 退回纯跳转
      - P2 可选组件（--actors/--track）：角色小词典 = details.fold + .grid/.card（分组标题 .actors-side、引言 .quotes）；说法×证实双轨轴 = table.dualtrack（左轨 .cell-claim / 右轨 .cell-verify，徽章复用 .mark-*）
      - 编号章节头（可选）：<div class="section-head"><span class="index">01</span><h2>章名</h2></div>
@@ -505,7 +591,7 @@
      - 图例/说明：<p class="legend">...</p>；重点框：<aside class="note">...</aside>
      - 图像：<div class="img-card">...<div class="caption">[图N]</div></div>；回退：<div class="img-fallback">
      - 左侧常驻目录栏（v0.2.12）：<aside class="bnav"> 固定于视口左侧（240px）、常展开、透明背景，无触发按钮/遮罩；结构 = .bnav-head(.t) + .bnav-list > li > a.bnav-item(.t) + .bnav-foot；含 .bnav 时内容自动让位（body:has(.bnav) 加左内边距），≤880px 与打印时自动隐藏；条目超长省略、悬停显示原生 title。滚动高亮：内联 JS 扫描 a.sec-anchor，给当前章 .bnav-item 加 .active（陶土左边条+底色）。骨架与内联 JS 见 build_report._bnav_html()；含 .bnav 时装配器默认移除顶部 toc。
-     - 竖式里程碑时间轴（v0.2.9，ch2 可选）：.tl > .tl-item，内 .tl-date（日期 + .tl-cnt 采集量胶囊）+ .tl-dot.tg-* + .tl-body（.tl-tag.tg-* 类型标签 + 标题 + 说明）；类型 tg-official/media/view/bg/quiet/check。数据约定：事件节点 + 当日采集量。
+     - 竖式里程碑时间轴（v0.2.9，ch2 可选）：.tl > .tl-item，内 .tl-date（日期 + 采集量胶囊 .tl-cnt，仅在节点填了 count 时渲染）+ .tl-dot.tg-* + .tl-body（.tl-tag.tg-* 类型标签 + 标题 + 说明）；类型 tg-official/media/view/bg/quiet/check。图例只可声明本报告实际用到的类型；图例声称「日计数」就必须填 count——图例与渲染不一致是常见缺陷。
      - 裁决徽章族（v0.2.9）：.v.v-true（真实，砖红系 v0.2.11 起）/.v.v-part（部分真实·观点性，金）——与证据徽章 .mark-*（▲官方/●多源/△单源）分族，勿混用。
      - 断言卡（v0.2.9，ch3 程序化）：.claims > .claim：.claim-row（.claim-id + .claim-txt 断言原文 + .v 裁决徽章）+ details.fold 收纳说明与证据源；.claim-title 为模型摘要行（非标题元素，不进编号）；字段 facts.json claims[].short_title（≤24 字、只压缩原文、保留限定词）。
      - 事件摘要（v0.2.16 标签化，ch1，模型生成）：<div class="abstract"><dl><dt>一句话结论</dt><dd>…全篇总括…</dd><dt>事件定性</dt><dd>…</dd><dt>事实核查</dt><dd>N 条断言 → 真实/部分真实/证据不足（详见事实核查章）</dd><dt>平台采样</dt><dd>各平台样本量与补采说明</dd><dt>舆论主形态</dt><dd>按条数/按赞同加权的派别占比</dd><dt>少数派</dt><dd>低占比高质派别/玩梗反讽等</dd><dt>事件跨度</dt><dd>起→止日期与节点</dd></dl><p class="abs-foot">模型生成·以各章为准</p></div>——dt 为标签列（衬线加粗、与正文同字号 16px）、dd 为内容列（无衬线与正文一致；两列网格，≤640px 堆叠）；标签按报告类型可增减，dd 长文可再分 p；旧两段式（.abs-label + .abs-txt×2）仍兼容渲染（生成器 --abstract 自动识别：结构化标签式 → dl 行，旧两段式 → 段落）。
