@@ -8,3 +8,17 @@ cookie.txt
 browser_data/
 data/_login_probe/
 *.log
+
+# 备份与内部工作稿（禁止入库）
+# 动机：仓库是 PUBLIC，而本地技能目录里混着这些文件；此前 .gitignore 未覆盖它们，
+# 一次 `git add -A` 就会把备份、旧版暂存与内部体检存档推上公网。
+*.bak
+*.bak-*
+*.bak_*
+_backup_*/
+_audit/
+_cases/
+SYNC_PENDING.md
+
+# 发布助手运行时（发布前预演/临时件）
+*.tmp
