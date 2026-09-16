@@ -1,7 +1,7 @@
 # 🥔 Potato Skills
 
 > 土豆先生的 AI 技能工具箱
-> 仓库分为 `claude-code-skill/`（Claude Code 技能，共 11 个）与 `deepseek-harness-skill/`（DeepSeek Harness 技能，共 15 个，含同名技能的 dsh 适配版）。
+> 仓库分为 `claude-code-skill/`（Claude Code 技能，共 11 个）与 `deepseek-harness-skill/`（DeepSeek Harness 技能，共 16 个，含同名技能的 dsh 适配版）。
 
 ---
 
@@ -28,14 +28,15 @@
 > 以下 11 个为本仓库 Claude Code 同名技能的 **dsh 适配版**（内容按 DeepSeek Harness 环境调整，功能同上表，不再重复介绍）：
 > `can-guo-shi`（参国是）、`cha-ren-shi`（察人事）、`jian-fu-ci`（简浮辞）、`jian-zhen-zhang`（见真章）、`lan-feng-yun`（揽风云）、`li-mai-luo`（理脉络）、`na-bai-chuan`（纳百川）、`na-ling-guang`（纳灵光）、`po-xu-wang`（破虚妄）、`network-tools`（网络工具）、`zhihu`（知乎）
 
-新增技能如下：
+新增技能如下（**均为 dsh 独有**：依赖 DSH 的 `~/.dsh/report-theme/` 契约与技能布局，故不做 Claude Code 版）：
 
 | 技能（目录名） | 类型 | 说明 |
 |------|------|------|
-| 百宝袋（bai-bao-dai） | 信息聚合 | 热点事件多方信息汇总与视点综合分析——微博/小红书/知乎三平台采集流水线 |
+| 百宝袋（bai-bao-dai） | 信息聚合 | 热点事件多平台信息汇总与综合报告装配——微博/小红书/知乎三平台采集、语料治理、HTML 装配（**舆论立场分析由「判风潮」承担**，本技能只做装配与交接） |
+| 判风潮（pan-feng-chao） | 舆论分析 | 热点事件舆论立场分析——按事件定制立场体系，输出立场占比与少数派结构、声量与人数对照、逐日分母与区间；以固定种子分层人工抽检给出误判率、编码信度、归类覆盖率与未识别层漏检估计；另附变点筛查、事件对齐、口径漂移告警与工件指纹。可单独使用，也可作为联合报告的触点 A / 触点 B |
 | 问候语（greeting） | 小工具 | 根据当前时间自动生成对应时段的问候语 |
 | 微信读书（Tencent-WeChatReading） | 阅读助手 | 搜索书籍、管理书架、查看笔记划线、浏览书评、阅读统计、发现推荐好书 |
-| 三合一（san-he-yi） | 联合入口 | 揽风云×破虚妄×百宝袋三技能联合报告入口——依工作流依序编排，产出「多方信息汇总+事实核查+舆论立场」综合报告 |
+| 缀众章（zhui-zhong-zhang） | 联合入口 | 热点事件综合报告的多技能编排入口（把多方产物连缀成一份）——揽风云×破虚妄×百宝袋×判风潮，依工作流依序编排，产出「信息汇总 + 事实核查 + 立场结构」综合报告。**原名「三合一」/`san-he-yi`** |
 
 ---
 
@@ -113,7 +114,7 @@ curl -o ~/.dsh/skills/{技能目录名}/SKILL.md --create-dirs \
 
 #### 附带：报告皮肤 report-theme/（报告家族共享组件）
 
-百宝袋/揽风云 的 HTML 报告皮肤与三合一联合任务依赖 `report-theme/`——含单一事实源主模板（`report_template.html`）、分发脚本（`sync_theme.py`）、联合/装配契约（`CONTRACT-joint.md`/`CONTRACT.md`）与交付门禁（`check_report.py`）。安装（三合一联合任务必需）：
+百宝袋/揽风云 的 HTML 报告皮肤与缀众章联合任务依赖 `report-theme/`——含单一事实源主模板（`report_template.html`）、分发脚本（`sync_theme.py`）、联合/装配契约（`CONTRACT-joint.md`/`CONTRACT.md`）与交付门禁（`check_report.py`）。安装（缀众章联合任务必需）：
 
 ```bash
 cp -r deepseek-harness-skill/report-theme ~/.dsh/report-theme
@@ -156,8 +157,9 @@ potato-skills/
         ├── zhihu/              ← 知乎的 dsh 适配版
         ├── bai-bao-dai/        ← 百宝袋（新增）
         ├── greeting/           ← 问候语（新增）
+        ├── pan-feng-chao/      ← 判风潮（新增，舆论立场分析；联合报告的触点 A / 触点 B）
         ├── Tencent-WeChatReading/  ← 微信读书（新增）
-        └── san-he-yi/          ← 三合一（新增，三技能联合入口）
+        └── zhui-zhong-zhang/   ← 缀众章（新增，联合报告编排入口；原名「三合一」/san-he-yi）
     └── report-theme/           ← 报告皮肤主控（主模板+分发+契约+门禁）
 ```
 

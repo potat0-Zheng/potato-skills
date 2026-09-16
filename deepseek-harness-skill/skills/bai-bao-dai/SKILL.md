@@ -1,6 +1,6 @@
 ---
 name: bai-bao-dai
-description: 百宝袋——热点事件多方信息汇总与视点综合分析工具。整合微博/小红书/知乎三平台爬虫，执行"采集→事实还原→舆论把握→综合报告"四阶段流水线。当用户请求对某一热点事件进行多平台信息汇总、多方视角还原真相、舆论走向分析时使用；也可单独调用内置爬虫（如仅爬取知乎某问题/回答）。通过 /百宝袋 调用。
+description: 百宝袋——热点事件多平台信息汇总与综合报告装配工具。整合微博/小红书/知乎三平台爬虫，执行"采集→归一化→语料治理→事实还原→综合报告装配"流水线，产出结构化 HTML 综合报告。当用户请求对某一热点事件做多平台信息汇总、多方视角还原事件真相、并装配成一份可交付报告时使用；也可单独调用内置爬虫（如仅爬取知乎某问题/回答）。舆论立场类分析由 /判风潮 承担，本技能只做装配与交接触点。通过 /百宝袋 调用。
 ---
 
 # 百宝袋（bai-bao-dai）
@@ -9,15 +9,17 @@ description: 百宝袋——热点事件多方信息汇总与视点综合分析�
 
 对指定热点事件，完成两件事：
 1. **多方视角还原事件真相**（事实层）——多源交叉、证据分级、冲突消解、对立观点显式覆盖
-2. **多方评论把握舆论走向**（舆论层）——按立场聚类评论、识别少数派与对立观点、判断焦点转移
+2. **装配可交付的综合报告**（呈现层）——把 ①②③ 的工件与 LLM 深度内容装配成结构化 HTML，并守住引用闭环与口径披露
 
-不过度依赖复杂分析工具，但通过核查方法与立场聚类保证深度。最终产出结构化 HTML 综合报告。
+舆论层（立场聚类、占比、少数派、抽检与信度）**由独立技能 `/判风潮` 承担**，本技能只在其两侧提供交接触点，见「阶段 3」。
+
+不过度依赖复杂分析工具，但通过核查方法与工件契约保证深度。最终产出结构化 HTML 综合报告。
 
 ## 目录结构
 
 ```
 {SKILL_DIR}/
-├── config.json            # 平台开关、默认参数、限速、探测项（立场词典按事件定制，不存默认）
+├── config.json            # 平台开关、默认参数、限速、探测项、政策工具族注册（不存舆论配置：立场体系归 /判风潮）
 ├── setup.py               # 依赖与凭证检查
 ├── zhihu/                 # 知乎爬虫（内嵌，自原 zhihu skill 迁移）
 │   ├── crawl.py           # 单回答/全问题（输出回答链接+发布时间）
@@ -26,10 +28,11 @@ description: 百宝袋——热点事件多方信息汇总与视点综合分析�
 │   ├── collect.py         # 统一采集入口（外部平台驱动 MediaCrawler，无凭证诚实降级）
 │   ├── normalize.py       # 多源归一化 JSONL（知乎 md + MediaCrawler 微博/小红书 schema）
 │   ├── check.py           # 事实核查辅助（调 china_sources 初查；po-xu-wang 未装时自动降级为 LLM 多源核查）
-│   ├── opinion.py         # 舆论立场聚类（单标签，命中关键词最多者胜；立场词典按事件定制，--stances 传入；含词典质检 dictionary_quality 与焦点转移 stance_timeline 输出）
-│   ├── build_report.py    # 综合报告生成（9 章结构，含 KPI/条形/堆叠/矩阵等纯 CSS 可视化）
-│   └── selftest.py        # 工具自检（离线层 + 在线最小尝试，见「工具自检」节）
+│   ├── build_report.py    # 综合报告生成（十章结构，含 KPI/条形/堆叠/矩阵等纯 CSS 可视化）
+│   ├── selftest.py        # 工具自检（离线层 + 在线最小尝试，见「工具自检」节）
+│   ├── relevance_gate.py  # 语料治理（产出 normalized/data.relevant.jsonl，语料冻结的最后一环）
 │   └── policy/            # 政策工具族（积木模块，见「政策工具族」节；config.json policy_tools 注册）
+│                          # ※ 舆论聚类/抽检脚本已迁出：见 skills/pan-feng-chao/scripts/（阶段 3）
 ├── templates/report_template.html
 ├── tests/test_pipeline.py # 离线流水线测试（python -m unittest discover -s tests）
 ├── external/              # 外部爬虫（MediaCrawler / weiboSpider / Spider_XHS）
@@ -38,7 +41,7 @@ description: 百宝袋——热点事件多方信息汇总与视点综合分析�
 
 ## 四阶段工作流
 
-**协同编排契约（三技能联合任务）**：当任务由「揽风云 × 破虚妄 × 百宝袋」多技能汇总类指令触发时，遵行 `~/.dsh/report-theme/CONTRACT-joint.md`（衔接约束的单一事实源，细则以该文件为准，本段不再重复）。要点：三平台（知乎+微博+小红书）真实采集为硬性要求、任何跳过须经用户确认并写入合规账本；装配用 `build_report.py --joint --compliance data/{event_id}/compliance.json`，交付前跑 `check_report.py --joint --strict`。
+**协同编排契约（联合任务，四技能）**：当任务由 `/缀众章`（揽风云 × 破虚妄 × 百宝袋 × 判风潮）编排时，遵行 `~/.dsh/report-theme/CONTRACT-joint.md`（衔接约束的单一事实源，细则以该文件为准，本段不再重复）。要点：三平台（知乎+微博+小红书）真实采集为硬性要求、任何跳过须经用户确认并写入合规账本；**舆论立场分析不在本技能内执行**——它由 `/判风潮` 在**两个触点**提供（触点 A 立场体系在语料冻结之后、②③ 之前；触点 B 舆论数字在 ②③ 之后），见「阶段 3」；装配用 `build_report.py --joint --compliance data/{event_id}/compliance.json`，交付前跑 `check_report.py --joint --strict`。
 
 ### 阶段 1：采集（collect.py）
 
@@ -62,6 +65,47 @@ description: 百宝袋——热点事件多方信息汇总与视点综合分析�
    - 凭证来源优先级：`--wb-cookie/--xhs-cookie` 参数 → 环境变量 `BBD_WB_COOKIE/BBD_XHS_COOKIE` → browser_data 持久化登录态（`--login` 建立）→ 小红书还可回退 MediaCrawler 内置 cookie
    - **MediaCrawler 配置无需手动调整**：collect.py 每次调用自动注入平台/登录方式/关键词/输出路径/条数/headless/评论开关等全部参数；`.env`、数据库、代理配置与本 skill 用法无关
    - **无凭证不静默**：collect.py 明确输出"`[平台] 未采集：<原因>`"并返回非 0；驱动失败（登录态失效/风控）同样标记并在报告中注明
+   - **部分成果保全（v0.5）**：MediaCrawler 非 0 退出或超时时，collect.py 仍统计已落盘 jsonl —— 有记录即判「部分采集」（rc=0 并在汇总里标注），只有 0 条才判「未采集」。文案已把「分页取尽（DataFetchError，属正常终止）」与「登录态失效/风控」区分开：前者换更短的关键词，后者才需要重新扫码，**不要靠加超时解决**。
+   - **多关键词一次跑（v0.5）**：`--keywords "克兰西,美国妈妈勒死3孩子"`，逗号分隔，各词独立落盘到 `raw/<platform>/<关键词>/`，互不覆盖（旧写法每个关键词单独调一次、共用同一 `--out`，后一次会覆盖前一次）。
+   - **先探针后放量（v0.5，长任务省时的第一原则）**：正式采集前先跑
+     ```bash
+     python "{SKILL_DIR}/scripts/collect.py" --keywords "词1,词2" --platforms weibo,xiaohongshu \
+         --probe --out "data/{event_id}/raw"
+     ```
+     探针为每词 5 帖、不取评论、超时 180s：一次确认「登录态还有效」「关键词有结果」「输出路径可写」三件事，再放量到 `--max-posts 50 --with-comments`。
+
+### 长任务的可观测性：轻量进度同步（v0.5）
+
+浏览器级采集单批 4–8 分钟，期间外部进程是黑箱。collect.py 用三个零依赖的机制把状态同步出来，**不引入任何服务、端口或轮询进程**：
+
+| 机制 | 载体 | 用途 |
+| --- | --- | --- |
+| 进度文件 | `{out}/_collect_progress.json`（原子替换，约 1KB） | 机器可读的单一事实源：总任务数、已完成任务及各自状态/条数、当前任务已跑秒数与已入库条数 |
+| stdout 心跳 | 每 `--heartbeat` 秒一行（默认 15s） | 形如 `[hb] weibo/克兰西 02:15 / 上限 07:00 · 已入库 帖 58 + 评 118 · running`；后台任务用 `job_output` 读到 |
+| 查询入口 | `collect.py --status "data/{event_id}/raw"` | 零副作用读取进度文件并打印人类可读的进度表，**任何时刻可查，不影响正在跑的采集** |
+
+用法约定：
+
+1. **进度数字取自真实落盘量**（递归统计 `*.jsonl` 行数，帖与评论分开计），不是预估——因为 MediaCrawler 是边抓边写。**读法限制**：MediaCrawler 会先取完一批结果集再批量落盘，因此单批前 30–60 秒该计数常为 0，属正常而非卡死；心跳行在超过 45 秒仍为 0 时会自行标注「未落盘（结果集取完才写盘，属正常）」。它是**下界**，不是完成度百分比。
+2. **向用户同步时只读进度文件**，一次 `--status` 就能报出「已完成 3/6，当前第 4 个关键词已跑 2 分 15 秒、入库 176 条」；不需要打断采集，也不需要翻日志。
+3. **每个任务收尾都往进度文件追加一条 done 记录**（含 state 与 note），因此采集结束后它同时是一份**逐批采集台账**，可直接抄进覆盖声明与合规账本。
+4. 进度文件与 MediaCrawler 自身的 `_mediacrawler.log`（每次运行覆盖写）都留在 `raw/<platform>/<关键词>/` 下，是排障时的第一现场。
+
+### 长任务的执行顺序（硬性）
+
+采集与流水线**不得交叉**，否则会白做一遍：
+
+```
+① 探针（--probe）→ ② 放量采集（--keywords 一次跑完，期间用 --status 报进度）
+→ ③ 采集全绿/逐批登记完成后，才冻结「事件窗口」（normalize.py --since/--until）
+→ ④ normalize → relevance_gate（至此语料冻结）→ /判风潮 触点 A（产出 stances.json，只出体系不出数字）
+→ ⑤ ②揽风云 / ③破虚妄 → /判风潮 触点 B（opinion → spotcheck --make → 人工判读 → --apply）
+→ ⑥ build_report 装配 → check_report 门禁 → §10 数据对账
+```
+
+- 第 ③ 步之前**不要**跑 normalize，也不要在语料冻结前调用 `/判风潮`：窗口一变，语料集合随之改变，抽检抽样单（固定 seed 分层抽样）会整批换个样本，人工判读成果全部作废。
+- `/判风潮` 的 `spotcheck.py --make` 判读单必须在**语料冻结之后**生成，`--apply` 把结论写回 `opinion.json`；重跑聚类会覆盖 `spotcheck` 字段，重跑后须重新 apply——**这两条纪律不因脚本换了归谁而豁免**。
+- 归因纪律：**含中文的驱动脚本一律用 Python 写**（Windows PowerShell 5.1 按 GBK 读 UTF-8 无 BOM 的 `.ps1`，中文关键词会直接变成解析错误）。
 
 ### 阶段 2：归一化 + 语料治理 + 事实还原（normalize.py + relevance_gate.py + check.py）
 
@@ -101,85 +145,26 @@ description: 百宝袋——热点事件多方信息汇总与视点综合分析�
      否则强项会被弱项拖成「证据不足」。否定性从句（未见/未回应）若确需保留，单独登记。
    - **降级说明**：本技能可独立使用。若本机未安装 po-xu-wang skill，check.py 自动输出"待核查"（china_sources=False），由 LLM 直接用 WebSearch 完成多源核查——不影响流水线其余环节
 
-### 阶段 3：舆论把握（opinion.py）
+### 阶段 3：舆论把握（由 `/判风潮` 执行）
 
-1. **构造本事件的立场词典（必需）**：立场不能依赖全局默认（config.json 的 stance_keywords 恒为空）。**词频预检先行**：先跑一次聚类或扫描语料（opinion.json 的 `dictionary_quality.doc_frequency` / opinion.md），**把两派共用的中性高频词（如「学英语」「世界」「国际」「150」「差距」等）从各立场词表中剔除**——这类词会让中立帖、媒体转述帖被灌入某一立场，导致占比系统性失真；只保留单方话语特征词。再依据采集内容与首轮搜索看到的观点分歧，构造 `{立场: [关键词,...]}` 写入 `data/{event_id}/stances.json`（中性示例见 `data/example/stances.json`）：
-   ```json
-   {
-     "支持方A": ["关键词1", "关键词2"],
-     "反对方B": ["关键词3", "关键词4"]
-   }
-   ```
-2. 聚类（单标签：命中关键词最多者胜，平票按词典插入顺序，无命中归**未识别**层）。**v0.3 起为四层口径**：
-   `A 个人表达样本`（命中词典者，**立场占比的分母**）· `B 机构/媒体帖`（信息供给，不进分母）·
-   `C 未识别残差`（另出诊断与分段）· `D 语料治理剔除噪声`（由 relevance_gate 的剔除量给出）：
-   ```bash
-   python "{SKILL_DIR}/scripts/opinion.py" --in "data/{event_id}/normalized/data.relevant.jsonl" \
-       --out "data/{event_id}/opinion.json" --event "关键词" \
-       --stances "data/{event_id}/stances.json" --rules "data/{event_id}/opinion_rules.json"
-   ```
-   - **「未识别」不等于「无关」**（v0.4 改名）：它的判据只是"立场词零命中"；相关性上游已判过。
-     报告里禁止再写「无关/其他」（门禁 G10）。
-   - **两个覆盖率都要披露**：`coverage_rate` = A / 全部语料（保守下界）；`coverage_of_judgeable` =
-     A / 可判集合（= A + 规则层独有 + 未分类段）。只给前者会把覆盖率系统性压低，因为分母里含几百条
-     本就不含立场表达的反应/玩梗/轶事。
-   - **未识别必须分段披露**：`residual.composition` 给"纯反应 / 原样转述 / 未分类（待抽样人工核）"。
-     **不得把未分类段写成"不含立场表达"** ——那需要语义判断，只能靠抽样人工核；未核之前既不能当噪声，
-     也不能画进占比。
-   - **为什么分层**：机构帖是信息供给方而非舆论主体，把「报道了某立场」当成「持某立场」，会让「高赞代表」被媒体转述帖占满；
-     把「未识别」当成一个立场画进图表，则是把方法缺陷当数据结论。`--no-split` 可退回旧单层行为。
-   - **B 层只按账号名机构特征词判定**（不再用"报道用语 + 话题标签"）——话题标签是普通网友也用得极多的写法，
-     该规则会把网友长帖误判为机构帖、污染分母。删规则优于调词表。
-   - **样本可溯源**：每条 top_sample 带 `platform/id/url/ref_url`；`ref_url` 由脚本解析——自身 URL 优先，
-     微博/小红书评论无独立永久链接时**回指其父帖**。装配端据此自动为高赞代表挂号引用。
-   - **残差诊断**：`residual.diagnostics` 含高频 n-gram、与立场词表的差集、按点赞**中位段**抽样（不用高赞：高赞多为媒体帖，代表性最差）。
-2b. **规则层（口语判据，v0.4，可选但强烈建议）**：另写 `data/{event_id}/opinion_rules.json`：
-   ```json
-   {"立场名": {"positive": ["词"], "patterns": ["正则"]}, "noise_patterns": ["^纯表情/求链接等"]}
-   ```
-   - **为什么需要**：中文 UGC 表态的主流写法是「复述动作 + 价值判断」（"她揪着孩子脖子一分钟" + "就是霸凌"），
-     **一个标签词都不含**。只靠标签词表，这类表达整批落进"未识别"——实测 702 条未识别里，单靠事件口语
-     特征词就能再判出约 100 条。
-   - **纪律**：规则层与词典层**并列不合并**（词典层是可复现下界，规则层是上界）；
-     **正则判不了立场**——实测误判率约 2–3 成（把"三岁儿子手肘碰到女士"判成儿童边界议题、
-     把"调解失败"的事实复述判成质疑基层）。因此规则层**必须抽样人工核（每立场 10 条）并写出误判率**
-     回填 `rule_layer.status/precision`；未抽检时只读作**占比上界**，不得单独下结论。
-3. **人工抽检（引用前必做，v0.4；脚本 `scripts/spotcheck.py`）**——三种核，逐条判读后回填，脚本算率：
+**本阶段不在百宝袋内执行。** 舆论把握（立场聚类、占比与少数派结构、人工抽检与编码信度、归类覆盖率与词表核查）已整体移交独立技能 **`/判风潮`**（`~/.dsh/skills/pan-feng-chao/`；判读标准见其 `references/codebook.md`，阈值集中在其 `config.json`）。本技能在该阶段只剩两处交接触点：
 
-   ```bash
-   # ① 生成判读单（固定 seed，任何人可复现同一批样本）
-   python "{SKILL_DIR}/scripts/spotcheck.py" --kind stance       --in normalized/data.relevant.jsonl \
-       --opinion opinion.json --out data/{event_id}/spotcheck_stance.json --make --n 10
-   python "{SKILL_DIR}/scripts/spotcheck.py" --kind rule         --in ... --opinion ... --out .../spotcheck_rule.json --make --n 10
-   python "{SKILL_DIR}/scripts/spotcheck.py" --kind unclassified --in ... --opinion ... --out .../spotcheck_unclassified.json --make --n 30
-   # ② 人工逐条判读（判读单同时输出 .md：人读填 → 结论写回 .json 的 items）
-   # ③ 计算（逐条必须填完，缺项即失败，不产出部分结果）
-   python "{SKILL_DIR}/scripts/spotcheck.py" --kind stance --in ... --opinion ... --out ... --apply
-   ```
+| 触点 | 位置 | 执行者 | 产出工件 |
+| --- | --- | --- | --- |
+| **A：立场体系**（只出体系，不出数字） | 阶段 2 语料治理之后、②③ 之前 | `/判风潮` | `data/{event_id}/stances.json`（可选 `opinion_rules.json`）+ `codebook.md` |
+| **B：舆论分析**（一次出齐） | ②③ 之后、阶段 4 装配之前 | `/判风潮` | `opinion.json`（含回写的 `spotcheck` 字段）+ `spotcheck_{stance,rule,unclassified}.json/.md` |
 
-   - **判读口径（可被否决，但必须写清）**：`对` = 这条确实属于所标立场；`错` = 不属于。
-     未分类核：`has_stance` = 这条含不含立场表达，含则在 `stance` 里写立场名。
-   - **`--apply` 会自动回写 `opinion.json` 的 `spotcheck` 字段**，装配端据此渲染「人工抽检结果」小节，
-     门禁 G11 据此校验；不跑抽检时报告只能把占比标为"未校正"。
-   - **误判率 >30% 的立场不得作为主结论呈现**；未分类核给出"含立场表达"的估计与 95% 区间，
-     并据此说明占比被低估了多少。
-   - **三种核各自的作用**：stance 核校正**确定性**（这个标签靠不靠得住）、rule 核校正**上界**
-     （正则只能命中"像"某立场的表述，实测误判率 3 成上下）、unclassified 核回答**漏了多少**。
-4. **归类覆盖率门禁（每次聚类后检查；不达标先修订词典重跑，最多一次）**：
-   - **覆盖率与残差**：读 `opinion.json` 的 `coverage_rate`（A 层占相关语料比例）与 `residual.split`。
-     覆盖率 **< 70%**（即未归类 > 30%）时，**依据 `residual.diagnostics` 而非 top_samples** 提炼漏掉的关键词：
-     `grams_outside_vocabulary` 给出「残差高频词 − 立场词表」的差集，是补词典候选；top_samples 是高赞样本，
-     高赞恰多为媒体转述帖，按其补词方向是反的。更新 `stances.json` 后重跑步骤 2（**至多一次**）；
-   - **"至多一次"是防反复调参，不是方法上限**：词典重跑用尽后若覆盖率仍不达标，**允许换方法**——
-     对残差做分层抽样人工标注（`grams_outside_vocabulary` 分层抽 30–50 条），产出一份**标注层**并列呈现。
-     但标注层必须显式标为"人工标注"，**不得混进立场占比冒充统计结果**，也不得据此下"主流/压倒性"类判断（门禁 G7）；
-   - **零命中词**：若运行输出「词典质检警告」（df=0 关键词），剔除或改写这些词后重跑步骤 2（**至多一次**）；逐关键词文档频率明细见 opinion.json 的 `dictionary_quality.doc_frequency`；
-   - **禁止以"无限重试凑比例"的方式调参**——修订忌矫枉过正（删净单方措辞会让该立场整体漏入「其他」），
-     对照第一版与修订版分布，两版都失衡时如实披露，而非二选一硬用；
-   - 重跑后「其他」仍 >30%（覆盖率 <70%），或某立场被压至 <10% 而人工判断明显与语料不符（如反对方记录被削到个位数），
-     一律如实写入覆盖完整性声明，并按上一条给标注层，不得绕行门禁。
-5. **否定/反讽复核（防呆提示）**：opinion.py 会把"命中词被否定词（不/没/未/非/别/莫/无…）紧邻前置修饰"的样本打 `negated` 标记（opinion.json 样本级字段 + opinion.md ⚠ 标记）。LLM 复核时须人工判断这些样本与「无关/其他」高赞样本：真否定/反讽应转标立场或按对立观点处理，复核结论写入 viewpoint.md；**不得把疑似反讽文本直接当立场证据**（聚类不自动改判，仅提示）。
-6. 结合 opinion.md 由 LLM 做**视点综合**：提炼各立场论证结构、标注少数派与对立观点、判断焦点转移（如从"赔偿金额"转向"调解制度"），写入 viewpoint.md。**"焦点转移/走势"一类结论只能在多日采集下给出**：单一时点采集只能写"各发布日占比"，不得写成舆论演变（CONTRACT-joint §5）。
+**立场体系（触点 A）由 `/判风潮` 构造**：依据本事件的实际观点分歧产出 `stances.json` 与判读口径 `codebook.md`（含词频预检、纳入/排除操作判据）。**本技能不再教用户手写立场词典**，`config.json` 也不再保存任何舆论配置（旧的 `stance_keywords` / `stance_note` 已删除）。
+
+**仍然有效、不得省略的五条纪律**（原阶段 3 的硬约束，继续约束 `/判风潮` 的调用方）：
+
+1. **顺序不可换**：语料冻结（`normalize` + `relevance_gate` 完成、事件窗口定死）**之前不得**启动立场聚类。窗口一变，语料集合随之改变，抽检的固定 seed 分层样本整批更换，人工判读成果全部作废。
+2. **重跑即重做**：重跑聚类会覆盖 `opinion.json` 的 `spotcheck` 字段，因此每次重跑后必须重做抽检三步（`--make` → 人工逐条判读 → `--apply`），不得沿用旧结论。
+3. **定量不得早于 ②③ 发布**：触点 B 的立场数字排在 ②揽风云、③破虚妄 之后，避免"先定调、后补证"。
+4. **口径唯一权威**：联合态的四层口径（A 个人表达 / B 机构帖 / C 未识别残差 / D 治理剔除噪声）一律以 `~/.dsh/report-theme/CONTRACT-joint.md` **§9.1** 为准。本 SKILL.md 只引用、不复述，避免出现第二事实源。
+5. **工件名与字段名不变**：仍产出 `opinion.json` 与 `spotcheck_*.json`；阶段 4 的 `build_report.py`、门禁 `check_report.py` 按既有字段读取，改名须先改契约。
+
+**视点综合（`viewpoint.md`）的归属**：联合任务中由 ②揽风云 产出（见 CONTRACT-joint §9.2 立场卡组与视点综合）；百宝袋独立使用时由 LLM 依据 `/判风潮` 的 `opinion.json` / `opinion.md` 撰写，再经 `--viewpoint` 注入。**"焦点转移 / 走势"一类结论只能在多日采集下给出**：单一时点采集只能写"各发布日占比"，不得写成舆论演变（CONTRACT-joint §5）。
 
 ### 阶段 4：综合报告（build_report.py）
 
@@ -198,7 +183,7 @@ python "{SKILL_DIR}/scripts/build_report.py" --event "关键词" \
 ```
 （`--normalized` 指向**治理后**的 `data.relevant.jsonl`：装配端据此产出「原始 → 分析」口径、按平台分层收来源，
 KPI 的"分析语料/事件跨度"也以它为准；传 `data.jsonl` 会退回未治理口径并在控制台提示。
-`--actors` 可选：三技能联合任务由 ②揽风云 产出，见「新增约定」与 CONTRACT-joint §8）
+`--actors` 可选：联合任务由 ②揽风云 产出，见「新增约定」与 CONTRACT-joint §8）
 
 **质量门（交付前必跑，0 error 才可交付；自检/装配规范见 `~/.dsh/report-theme/CONTRACT.md`）**：
 ```bash
@@ -232,6 +217,7 @@ LLM 深度内容（`--viewpoint/--coverage/--abstract`）只写 md：md 渲染�
 - **竖式时间轴（`--timeline-milestones`）**：`[{date,type,tag,title,text,count}]`，type∈official/media/view/bg/quiet/check；缺省回退“日期×记录数”简表。
 - **断言小标题**：`facts.json` 每条 claims 增加 `short_title`（≤24 字、只压缩原文、保留限定词），渲染为 ch3 断言卡标题；ch4 只做裁决压缩视图（分工说明 + 分布胶囊 + 分组速览 + 冲突表），**两章不再复述**。
 - **来源分级**：`sources[].grade`（A/B/C）输出 `class="source-A/B/C"`；自动采集帖默认 C。
+- **来源索引锚点域（v0.5，`--sample-anchors` / `--source-cap`）**：装配端会按平台分层自动追加若干「平台语料样本链接」供逐帖回溯，它们按设计不逐条出现在正文引用中。旧行为把样本与精选信源混在同一 `refN` 域，导致每条样本都触发门禁 **W1**「索引有锚点但正文未引用」，只能靠 `--allow W1` 压下去。现在默认 `--sample-anchors sample`：样本行改用独立锚点 `id="sampleK"`（保留 `source-C` 分级底色），精选信源独占 `[1]–[N]`，W1 不再误报，`--allow` 只需保留 GW。`--source-cap N` 控制样本条数（默认 50，`0` = 不追加）；想回到旧行为用 `--sample-anchors ref`。注意：**被第六章高赞代表引用的样本地址仍计入精选区间**（它们承担举证角色），所以精选条数 ≠ `sources.json` 条数。
 - **左侧常驻目录栏**（v0.2.12）：默认注入（`--no-nav-drawer` 关闭），透明底、常展开、随滚动高亮当前章，并自动移除顶部 toc。
 
 报告章节（已实现）：报头（masthead：eyebrow + h1 + intro + 自动数字 hero-figure）→ 结论速览 → 时间线 → 核心事实汇编 → 事实核查结果 → 舆论观点综合（含 LLM 视点分析）→ 来源索引 → 覆盖完整性声明 → 方法论 → 时间戳。**报头说明**：`--title/--intro` 均留空时自动回退（h1=event、无导语）；hero-figure 数字由脚本从采集量/断言/立场自动生成，无需手填。
@@ -248,10 +234,9 @@ python "{SKILL_DIR}/zhihu/crawl.py" "<知乎问题URL>" "<输出.md>" --limit 5
 python "{SKILL_DIR}/zhihu/crawl.py" "<含/answer/的URL>" "<输出.md>"
 ```
 
-### 仅做舆论聚类
-```bash
-python "{SKILL_DIR}/scripts/opinion.py" --in "<normalized.jsonl>" --out "<输出.json>"
-```
+### 仅做舆论分析
+
+**不在本技能范围**：舆论聚类、立场占比与少数派、抽检与编码信度已迁至独立技能 **`/判风潮`**（脚本位于 `~/.dsh/skills/pan-feng-chao/scripts/`）。百宝袋不再提供该入口；需要单独做舆论分析时请直接调用 `/判风潮`。
 
 ### 依赖检查
 ```bash
@@ -269,7 +254,7 @@ python "{SKILL_DIR}/scripts/selftest.py" --json      # 结构化输出（供 age
 ```
 
 **自检内容**：
-- 离线层：用内置微型夹具跑通 normalize → opinion → build_report，验证本地工具链；另报 check.py 可选依赖 china_sources（po-xu-wang 未装不影响主流程）。
+- 离线层：用内置微型夹具跑通 normalize → build_report，验证本地工具链；另报 check.py 可选依赖 china_sources（po-xu-wang 未装不影响主流程）。
 - 在线层（微博/小红书）：各驱动 MediaCrawler 做 1 条最小关键词搜索，判定"可用 / 登录态失效 / 风控 / 未部署"。
 - 在线层（知乎）：cookie 文件存在性；若 config.json 的 `probe.zhihu_question` 配置了探测问题，再发 1 次 API 请求验证 cookie 真伪（HTTP 非 200 = 过期）。未配置时仅静态检查，网络验证随真实任务发生。
 
@@ -286,7 +271,7 @@ setup.py（静态体检：依赖/凭证是否存在）与 selftest.py（最小�
 ## 强制质量检查项（交付前核对）
 
 1. **对立/少数观点必须显式覆盖**并标注信源稀缺度（防止主流叙事单边化）
-2. **舆论按立场聚类**（非简单正负情感），识别 <10% 的少数派；**分类标签已按阶段 3 第 3 条抽检**并写出误判率
+2. **舆论数字必须带误判率**：立场占比与抽检误判率**并排呈现**（门禁 G11 会查），<10% 少数派须显式标注；数据由 `/判风潮` 产出，百宝袋只负责在第六章如实渲染——**未跑抽检时报告必须声明"占比为未校正读数"**（v0.6 起 `_spotcheck_html` 自动声明，不再静默留白）
 3. **覆盖完整性声明**：明确列出未采到的立场/平台/信源（如"家属方未回应""小红书未部署"），
    **并给出语料治理口径**：原始采集 N 条 → 分析 M 条（剔除 X 条、占比、平台/类型构成）
 4. **事实冲突必须消解**：口径/时间/立场差异分析 + 给出更可信一方
@@ -320,7 +305,7 @@ MediaCrawler 需启动 Playwright/Chromium **浏览器进程**，并读写 `{SKI
 - **免扫码是常态**：只要 `browser_data/<platform>_user_data_dir` 存在（一次 `--login` 扫码建立），collect 即判为"持久化登录态"，以 MediaCrawler `qrcode` 模式**静默复用会话**，不弹码、不需 cookie。报错文案"需 `--login` 扫码或提供 cookie"是通用提示，不代表缺凭证——先检查对应 `*_user_data_dir` 的最后写入时间。
 - **小红书卡死识别（重要）**：xhs 登录态老化（数日/数周未用）或被风控时，headless 会话会长期停滞在等待/验证，**直至超时仍可能不返回**。处置：首轮超时后**不要盲目加时重试**（已实测 240s→480s 重试同样无产出），应检查 `xhs_user_data_dir` 时效，过旧则提示用户 `collect.py --login xiaohongshu`（有头扫码刷新会话）；必要时在有头/人工环境下采集 xhs。
 - **服务端吊销判据（实测 2026-09）**：本地 cookie 未过期≠可用——小红书会主动吊销长期不活跃的 `web_session`（本地 expires 仍 2027，服务端已判失效）。快速诊断法：以 danger-full-access 起 MediaCrawler 约 60–90s 探针，日志出现 `[XiaoHongShuClient.pong] Login state result: False` → **服务端吊销，本地任何 cookie 均无效，唯一恢复路径是重新登录**（`--login xiaohongshu` 或注入新 cookie）；出现 `acw_tc / sec_poison_id` 过期仅为风控短期标记，可忽略。此场景下"验证 cookie 过期"必须走服务端 pong，不能只看本地过期时间。
-- **selftest.py 离线层**在受限沙箱会因无法创建系统临时目录而失败：执行前将 `TMP/TEMP` 环境变量重定向到工作区可写目录。
+- **临时目录（v0.6 起已自愈）**：`selftest.py` 与 `tests/` 默认用系统临时目录；在受限沙箱（workspace-write）下系统目录不可写，二者会**自动回退**到工作区内的 `skills/bai-bao-dai/tests/_tmp/`。**不再需要**手工把 `TMP/TEMP` 重定向到工作区（旧做法仍有效，但已非必需）。
 
 ## 政策工具族（scripts/policy · 模块化积木）
 

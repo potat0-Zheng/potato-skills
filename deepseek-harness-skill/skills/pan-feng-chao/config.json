@@ -1,0 +1,50 @@
+{
+  "_readme": [
+    "判风潮阈值配置。取值优先级：命令行 > 本文件 > 脚本内置默认。",
+    "缺失的键不影响运行（用内置默认），工件里的 thresholds.sources / pipeline 会如实披露每一项的来源。",
+    "改本文件＝改判定阈值；改 stances.json＝改口径（立场占比会变），后者必须用 vocab.py --diff 留痕。",
+    "两个脚本读同一份文件，各自只取自己认识的键；不认识的键会被忽略（见 _owners）。"
+  ],
+  "_owners": {
+    "opinion.py": ["coverage_target", "minority_threshold", "mid_samples", "stance_keywords", "stance_note",
+                   "trend_min_days", "trend_min_day_denominator", "drift_coverage_pp", "drift_denominator_pct"],
+    "spotcheck.py": ["spotcheck_n", "seed", "error_rate_max", "coverage_target"]
+  },
+
+  "coverage_target": 70,
+  "coverage_target_note": "归类覆盖率目标（百分点）。低于它只触发措辞告警（不得写「主流/压倒性」），不改任何数字。",
+
+  "minority_threshold": 10,
+  "minority_threshold_note": "少数派判定阈值（百分点）：立场占比低于它即标 minority=true。",
+
+  "mid_samples": 12,
+  "mid_samples_note": "残差中位段抽样条数（残差诊断用；不用高赞——高赞多为媒体转述帖，代表性最差）。",
+
+  "spotcheck_n": 10,
+  "spotcheck_n_note": "每种核的抽样条数：stance/rule 核为「每立场」条数，unclassified 核为总条数。",
+
+  "seed": 2026,
+  "seed_note": "抽样种子。固定值保证任何人可复现同一批样本；改动它＝换一批样本，必须重跑 --make 与 --apply。",
+
+  "error_rate_max": 30,
+  "error_rate_max_note": "误判率上限（百分点）：超过该值的立场 usable_as_main=false，不得出现在主立场/主流/压倒性表述里。",
+
+  "trend_min_days": 3,
+  "trend_min_days_note": "允许谈论走势所需的最少有效日数；不满足时 selfcheck.trend_claim_forbidden=true。",
+
+  "trend_min_day_denominator": 20,
+  "trend_min_day_denominator_note": "单日「有效日」的下限（该日 A 层记录数）；低于它的日子不计入有效日。",
+
+  "drift_coverage_pp": 5,
+  "drift_coverage_pp_note": "同一事件重跑时，归类覆盖率变化超过该百分点即报口径漂移（配合 --prev）。",
+
+  "drift_denominator_pct": 10,
+  "drift_denominator_pct_note": "立场分母/语料条数等计数类指标变化超过该百分比即报口径漂移。",
+
+  "stance_keywords": {},
+  "stance_note": "立场词典兜底（**恒为空**）：立场必须按事件定制，用 --stances 传入；此处只承接百宝袋迁出的配置位，不得填默认词典。",
+
+  "intensity_example": {
+    "_note": "表态强度词表放在 stances.json 的顶层 intensity 键里（不是本文件）：{\"intensity\": {\"强烈\": [...], \"温和\": [...]}}。强度只作描述维度，不进分母、不改占比。"
+  }
+}

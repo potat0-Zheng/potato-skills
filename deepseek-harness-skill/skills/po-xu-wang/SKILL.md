@@ -23,7 +23,7 @@ model: deepseek-v4-pro
 
 若用户指令中无法判断模式，默认使用 `verify`。若用户的需求明显是"把这些材料整理到一起"或"梳理这个事件的来龙去脉"，应自动选择 `compile` 或 `timeline`。
 
-**联合态只走 `verify` + `facts.json`**（v2）：被三合一编排为第 ③ 阶段时，不进入 `compile` / `timeline`
+**联合态只走 `verify` + `facts.json`**（v2）：被 `/缀众章` 编排为第 ③ 阶段时，不进入 `compile` / `timeline`
 模式——汇编与时间线是 ② 揽风云的职责，同时启用会产生"谁写汇编"的歧义与互相覆盖。这两个模式是独立态模式。
 
 ---
@@ -309,9 +309,9 @@ WebSearch 返回的结果摘要往往已包含可核查的关键事实——数�
 - 对于 `compile`：核心内容精简 + 来源列表
 - 对于 `timeline`：时间线精简 + 关键节点
 
-### 联合模式（三合一：产出 `facts.json` 供 build_report 装配）
+### 联合模式（缀众章：产出 `facts.json` 供 build_report 装配）
 
-被 san-he-yi（三合一）编排为第 ③ 阶段时，核查结论不写 Word/HTML，而是把登记册写入 `data/{event_id}/facts.json`。
+被 `zhui-zhong-zhang`（缀众章，原「三合一」/`san-he-yi`）编排为第 ③ 阶段时，核查结论不写 Word/HTML，而是把登记册写入 `data/{event_id}/facts.json`。
 
 **字段表不在这里**——`facts.json` 的 schema 唯一权威是 `CONTRACT-joint.md §11`（与 ② 的工件同处）。
 本技能不复制字段、不即兴加字段。
@@ -329,7 +329,7 @@ WebSearch 返回的结果摘要往往已包含可核查的关键事实——数�
 | verify 九章在联合态的去向（哪章映射到哪个字段、哪章不做） | §11 首段表格 |
 
 装配端只消费 `claims`；编号按 `claims` 顺序（#1 起），`ref` 必须落在 `sources.json` 的编号域内。
-**独立态**（未接入三合一）仍按上文九章节输出，不受本节影响。
+**独立态**（未接入缀众章）仍按上文九章节输出，不受本节影响。
 
 ---
 

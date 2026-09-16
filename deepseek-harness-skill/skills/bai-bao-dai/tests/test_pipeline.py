@@ -3,9 +3,14 @@
 
 覆盖：
 1. normalize：知乎 md / MediaCrawler 微博·小红书 jsonl 归一化（含时间字段、微博 content 映射）
-2. opinion：单标签聚类（无小数条数、无对立立场并存）
-3. build_report：9 章齐全、LLM markdown（viewpoint）正确渲染
+2. build_report：十章齐全、LLM markdown（viewpoint）正确渲染
+3. build_report 降级（A7 回归）：缺字段时**不得**凭空印出测量值
 4. 工具函数：_fmt_epoch / map_mediacrawler / md_to_html
+5. selftest.py --offline 全绿
+
+**阶段 3 的测试去哪儿了**：`TestOpinion` / `TestOpinionNegation` 已随脚本迁往
+`skills/pan-feng-chao/tests/test_opinion.py`（类 `TestVocabularyContract`）。本目录
+不再 import 舆论脚本——脚本不在这儿了，留着就是"引用了不存在的模块"。
 
 运行：python -m unittest discover -s tests -v   （在 skill 根目录）
 """
@@ -17,9 +22,41 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import uuid
 
-SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
+SKILL_DIR = os.path.dirname(HERE)
 SCRIPTS = os.path.join(SKILL_DIR, "scripts")
+TMP_FALLBACK = os.path.join(HERE, "_tmp")
+
+
+def _mkworkdir(prefix):
+    """建一个**真的写得进去**的工作目录，返回其路径。
+
+    坑（实测）：不能只看 `tempfile.mkdtemp()` 有没有抛异常——DSH 的 workspace-write 沙箱下
+    它**建目录会成功、往里写才被拒**，于是 setUp 里的 `os.makedirs(raw/weibo)` 抛
+    PermissionError，整份测试变成 7 个 error。所以必须**探针写一次**才算数。
+    顺序：系统临时目录 → 本技能内 `tests/_tmp/`（工作区内，必然可写）。
+    """
+    candidates = []
+    try:
+        candidates.append(tempfile.mkdtemp(prefix=prefix))
+    except (PermissionError, OSError):
+        pass
+    fallback = os.path.join(TMP_FALLBACK, prefix + uuid.uuid4().hex[:8])
+    os.makedirs(fallback, exist_ok=True)
+    candidates.append(fallback)
+    for c in candidates:
+        try:
+            probe = os.path.join(c, ".write_probe")
+            with open(probe, "w", encoding="utf-8") as f:
+                f.write("ok")
+            os.remove(probe)
+            return c
+        except (PermissionError, OSError):
+            continue
+    raise PermissionError("找不到可写工作目录（系统临时目录与 %s 均不可写）" % TMP_FALLBACK)
+
 
 ZHIHU_MD = """# 老旧小区加装电梯，一楼住户反对怎么办？
 > 问题ID：12345678 | 总回答数：2 | 实际爬取：2
@@ -61,6 +98,9 @@ VIEWPOINT_MD = """# 视点综合
 > 依据：opinion.md
 """
 
+# 最小事实工件：只要 facts.json 可读即可（本目录不再测核查逻辑）
+FACTS_MIN = {"event": "E", "claims": [{"claim": "c1", "verdict": "真实", "reason": "r", "evidence": []}]}
+
 
 def run_script(name, *args):
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
@@ -82,7 +122,7 @@ def injected_content(html):
 
 class TestNormalize(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.mkdtemp(prefix="bbd_test_")
+        self.tmp = _mkworkdir("bbd_test_")
         raw = os.path.join(self.tmp, "raw")
         os.makedirs(os.path.join(raw, "zhihu"))
         os.makedirs(os.path.join(raw, "weibo"))
@@ -118,77 +158,12 @@ class TestNormalize(unittest.TestCase):
         self.assertIn("/answer/a1", zh["url"])
 
 
-class TestOpinion(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.mkdtemp(prefix="bbd_test_")
-        self.norm = os.path.join(self.tmp, "data.jsonl")
-        self.stances = os.path.join(self.tmp, "stances.json")
-        # 立场词典按事件定制，经 --stances 传入（config 默认已为空）
-        with open(self.stances, "w", encoding="utf-8") as f:
-            json.dump({
-                "支持加装": ["支持加装", "方便老人", "政策也支持", "老人上下楼"],
-                "一楼住户反对": ["一楼", "采光", "噪音", "用不上", "不公平"],
-                "质疑程序与分摊": ["表决", "费用分摊", "强推", "协商"],
-            }, f, ensure_ascii=False, indent=2)
-        with open(self.norm, "w", encoding="utf-8") as f:
-            for line in [
-                {"platform": "zhihu", "type": "answer", "id": "1", "author": "a", "time": "2025-06-01",
-                 "content": "支持加装电梯，方便老人出行，政策也支持，但费用分摊要协商透明",
-                 "metrics": {"likes": 10}, "url": "u1"},
-                {"platform": "zhihu", "type": "answer", "id": "2", "author": "b", "time": "2025-06-01",
-                 "content": "一楼完全用不上还要分摊费用，采光和噪音都受影响，太不公平了",
-                 "metrics": {"likes": 8}, "url": "u2"},
-                {"platform": "zhihu", "type": "answer", "id": "3", "author": "c", "time": "2025-06-02",
-                 "content": "程序上应组织全体业主表决，费用分摊没谈拢就强推不合适",
-                 "metrics": {"likes": 3}, "url": "u3"},
-                {"platform": "zhihu", "type": "answer", "id": "4", "author": "d", "time": "2025-06-02",
-                 "content": "随便聊聊，今天天气不错", "metrics": {"likes": 1}, "url": "u4"},
-            ]:
-                f.write(json.dumps(line, ensure_ascii=False) + "\n")
-
-    def tearDown(self):
-        shutil.rmtree(self.tmp, ignore_errors=True)
-
-    def test_single_label_and_counts(self):
-        out = os.path.join(self.tmp, "opinion.json")
-        r = run_script("opinion.py", "--in", self.norm, "--out", out, "--event", "事件X",
-                       "--stances", self.stances)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        with open(out, encoding="utf-8") as f:
-            data = json.load(f)
-        self.assertEqual(data["total_records"], 4)
-        # 无小数条数：count 全为整数
-        for d in data["stance_distribution"]:
-            self.assertIsInstance(d["count"], int)
-            self.assertIsInstance(d["pct"], float)
-        # 单标签：条数之和 == 总条数
-        self.assertEqual(sum(d["count"] for d in data["stance_distribution"]), 4)
-        # 四条记录应分属四个不同立场（含"无关/其他"兜底）
-        labels = {d["stance"]: d["count"] for d in data["stance_distribution"]}
-        self.assertEqual(labels, {"支持加装": 1, "一楼住户反对": 1,
-                                  "质疑程序与分摊": 1, "无关/其他": 1})
-        # 时间轴
-        self.assertEqual(data["timeline"], {"2025-06-01": 2, "2025-06-02": 2})
-        # 焦点转移：日期 × 立场（P1-6 新增输出键）
-        self.assertEqual(data["stance_timeline"], {
-            "2025-06-01": {"支持加装": 1, "一楼住户反对": 1},
-            "2025-06-02": {"质疑程序与分摊": 1, "无关/其他": 1},
-        })
-
-    def test_missing_stances_exits_nonzero(self):
-        """config 默认无词典时，不带 --stances 必须报错退出（不静默全归"无关/其他"）。"""
-        out = os.path.join(self.tmp, "opinion.json")
-        r = run_script("opinion.py", "--in", self.norm, "--out", out, "--event", "事件X")
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("立场词典", r.stdout or "")
-
-
 class TestBuildReport(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.mkdtemp(prefix="bbd_test_")
+        self.tmp = _mkworkdir("bbd_test_")
         self.facts = os.path.join(self.tmp, "facts.json")
         with open(self.facts, "w", encoding="utf-8") as f:
-            json.dump({"event": "E", "claims": [{"claim": "c1", "verdict": "真实", "reason": "r", "evidence": []}]}, f, ensure_ascii=False)
+            json.dump(FACTS_MIN, f, ensure_ascii=False)
         self.opinion = os.path.join(self.tmp, "opinion.json")
         with open(self.opinion, "w", encoding="utf-8") as f:
             json.dump({"event": "E", "total_records": 2, "stance_distribution": [
@@ -207,7 +182,7 @@ class TestBuildReport(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def test_nine_chapters(self):
+    def test_ten_chapters(self):
         out = os.path.join(self.tmp, "report.html")
         r = run_script("build_report.py", "--event", "事件X", "--facts", self.facts,
                        "--opinion", self.opinion, "--normalized", self.norm,
@@ -215,8 +190,10 @@ class TestBuildReport(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         with open(out, encoding="utf-8") as _f:
             html = _f.read()
-        chapters = re.findall(r"<h2>(一|二|三|四|五|六|七|八|九)、", html)
-        self.assertEqual(len(chapters), 9, f"9 章缺失: {chapters}")
+        # 十章齐全（旧断言只数到「九」，插章后「十、」整章漏检）
+        chs = [re.sub(r"<[^>]+>", "", c) for c in re.findall(r"<h2[^>]*>(.*?)</h2>", html)]
+        numbered = [c for c in chs if re.match(r"^[一二三四五六七八九十]、", c)]
+        self.assertEqual(len(numbered), 10, f"十章缺失：{numbered}")
         # viewpoint markdown 已渲染（非路径）
         self.assertIn("<strong>主流立场</strong>", html)
         self.assertNotIn("viewpoint.md</p>", html)
@@ -262,6 +239,76 @@ class TestBuildReport(unittest.TestCase):
         self.assertIn("双轨时间轴", h2)
         self.assertIn("cell-verify", h2)
         self.assertIn("mark-caution", h2)  # refute → ✗证伪 徽章
+
+
+class TestOpinionDegradation(unittest.TestCase):
+    """A7 回归：缺字段时**不得**凭空印出测量值。
+
+    背景：旧实现
+        `cov_now = float(opinion.get("coverage_of_judgeable") or opinion.get("coverage_rate") or 0)`
+    把「字段缺失」和「测得 0%」压成同一个 `0.0`，于是旧 schema 工件的报告里会出现
+    「当前归类覆盖率仅 0.0%（可判集合口径）」——一句凭空造出来的测量结论。
+    另外旧实现把缺 `spotcheck` 的情况静默 `return ""`，读者会把未校正读数读成带区间的结论。
+    """
+
+    def setUp(self):
+        self.tmp = _mkworkdir("bbd_degrade_")
+        self.facts = os.path.join(self.tmp, "facts.json")
+        with open(self.facts, "w", encoding="utf-8") as f:
+            json.dump(FACTS_MIN, f, ensure_ascii=False)
+        self.norm = os.path.join(self.tmp, "data.jsonl")
+        with open(self.norm, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"platform": "zhihu", "type": "answer", "id": "1", "author": "a",
+                                "time": "2025-06-01 10:00", "content": "x", "metrics": {"likes": 1},
+                                "url": "https://www.zhihu.com/q/1/a/1"}, ensure_ascii=False) + "\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _render(self, opinion_obj, name):
+        op = os.path.join(self.tmp, name + ".json")
+        with open(op, "w", encoding="utf-8") as f:
+            json.dump(opinion_obj, f, ensure_ascii=False)
+        out = os.path.join(self.tmp, name + ".html")
+        r = run_script("build_report.py", "--event", "事件X", "--facts", self.facts,
+                       "--opinion", op, "--normalized", self.norm, "--out", out)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(out, encoding="utf-8") as f:
+            return injected_content(f.read()), (r.stderr or "")
+
+    @staticmethod
+    def _dist():
+        return [{"stance": "支持加装", "count": 2, "pct": 100.0, "likes": 10,
+                 "minority": False, "top_samples": []}]
+
+    def test_missing_coverage_is_not_faked_as_zero(self):
+        body, err = self._render(
+            {"event": "E", "total_records": 2, "stance_distribution": self._dist(),
+             "stance_timeline": {"2025-06-01": {"支持加装": 2}}}, "nofield")
+        self.assertNotIn("覆盖率仅 0.0%", body, "缺字段被填成了 0.0% 的假测量值")
+        self.assertIn("—（未提供）", body)          # 缺失只能写"未提供"
+        self.assertIn("coverage_rate", err)          # 且必须在 stderr 提示
+
+    def test_coverage_label_matches_actual_field(self):
+        """口径标签必须与真正取到的字段一致（旧实现把 coverage_rate 也标成"可判集合口径"）。"""
+        body, _ = self._render(
+            {"event": "E", "total_records": 945, "denominator": 205, "coverage_rate": 21.7,
+             "stance_distribution": self._dist(),
+             "stance_timeline": {"2025-06-01": {"支持加装": 2}}}, "rateonly")
+        self.assertIn("占全部语料口径", body)
+        self.assertNotIn("可判集合口径", body)
+
+    def test_missing_spotcheck_is_disclosed_not_silent(self):
+        body, _ = self._render(
+            {"event": "E", "total_records": 945, "denominator": 205, "coverage_rate": 21.7,
+             "stance_distribution": self._dist()}, "nospot")
+        self.assertIn("人工抽检结果（未跑）", body)
+        self.assertIn("占比为未校正读数", body)
+
+    def test_no_stance_distribution_renders_no_spotcheck_claim(self):
+        """连占比都没有的工件，不得硬凑一句"未校正读数"（缺数据即不渲染）。"""
+        body, _ = self._render({"event": "E"}, "empty")
+        self.assertNotIn("未校正读数", body)
 
 
 class TestUtils(unittest.TestCase):
@@ -325,23 +372,14 @@ class TestUtils(unittest.TestCase):
         self.assertTrue(h.endswith("</ul>"))
         self.assertNotIn("<blockquote>", h[h.index("<ul>"):])
 
-
-class TestOpinionNegation(unittest.TestCase):
-    """P1-4：否定修饰防呆标记（疑似反讽/否定仅标记提示，不自动改判立场）。"""
-
-    def test_negated_keyword_flagged(self):
+    def test_opt_float_never_invents_zero(self):
+        """A7 的最小单元：`_opt_float` 对缺失/垃圾输入必须给 None，不给 0。"""
         sys.path.insert(0, SCRIPTS)
-        import opinion
-        st = {"支持方": ["支持加装"]}
-        label, _matched, negated = opinion.classify("我不支持加装电梯", st)
-        self.assertEqual(label, "支持方")          # 命中"支持加装"仍归该立场
-        self.assertEqual(negated, ["支持加装"])   # 但被"不"紧邻修饰 → 打防呆标记
-        label, _matched, negated = opinion.classify("我支持加装电梯", st)
-        self.assertEqual(negated, [])             # 无否定修饰 → 不标记
-        label, _matched, negated = opinion.classify("毫不支持加装的业主占多数", st)
-        self.assertEqual(negated, ["支持加装"])   # "毫不"（毫+不）同样触发
-        label, _matched, negated = opinion.classify("邻居都说反对加装，我没意见", {"反对方": ["反对加装"]})
-        self.assertEqual(negated, [])             # 仅命中词紧邻前置被否定才标记，不误伤
+        import build_report
+        for bad in (None, "", "abc", [], {}):
+            self.assertIsNone(build_report._opt_float(bad), repr(bad))
+        self.assertEqual(build_report._opt_float(0), 0.0)        # 真的是 0 才是 0
+        self.assertEqual(build_report._opt_float("21.7"), 21.7)  # 数字字符串可解析
 
 
 class TestSelftestOffline(unittest.TestCase):
@@ -351,6 +389,8 @@ class TestSelftestOffline(unittest.TestCase):
         r = run_script("selftest.py", "--offline")
         self.assertEqual(r.returncode, 0, (r.stdout or "")[-800:] + (r.stderr or "")[-800:])
         self.assertIn("normalize", r.stdout or "")
+        # 阶段 3 的步骤已迁出：离线链路不得再出现舆论脚本
+        self.assertNotIn("opinion", r.stdout or "")
 
 
 if __name__ == "__main__":

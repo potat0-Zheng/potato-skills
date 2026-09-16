@@ -5,5 +5,5 @@
 
 - 技能定义与工作流程：`SKILL.md`（唯一权威）
 - 版本与变更记录：`CHANGELOG.md`（贯穿式 `vN`）
-- 联合任务（三合一）衔接细则：`../report-theme/CONTRACT-joint.md`
+- 联合任务（缀众章）衔接细则：`../report-theme/CONTRACT-joint.md`
 - 核查工具：`tools/`（绝对路径调用，见 SKILL.md「技能路径」）

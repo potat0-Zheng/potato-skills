@@ -112,20 +112,33 @@ def check_joint(text, fname="<string>"):
                                "否则读者无法判断分母代表多少语料")
         else:
             mcov = re.search(r"归类覆盖率[^0-9]{0,12}(\d+(?:\.\d+)?)\s*%", text)
-            mjud = re.search(r"占可判集合[^0-9]{0,12}(\d+(?:\.\d+)?)\s*%", text) or \
-                re.search(r"可判集合[^0-9]{0,20}?(\d+(?:\.\d+)?)\s*%", text)
-            vals = [float(mcov.group(1))] if mcov else []
+            # 可判集合口径的读取顺序**不能反**：装配端的实际渲染是
+            #   `·<strong>12.3%</strong>（占可判集合 300 条）`
+            # ——数字在"占可判集合"**之前**。旧正则只写了"占可判集合 … %"这一种顺序，
+            # 于是第二个口径**从来没被读到过**（实测：v0.5 的 max(vals) 实际恒等于 coverage_rate）。
+            # 先按真实渲染取，再退回另两种顺序，兼容手工改写的报告。
+            mjud = (re.search(r"(\d+(?:\.\d+)?)\s*%[^0-9]{0,12}占可判集合", text)
+                    or re.search(r"占可判集合[^0-9]{0,12}(\d+(?:\.\d+)?)\s*%", text)
+                    or re.search(r"可判集合[^0-9]{0,20}?(\d+(?:\.\d+)?)\s*%", text))
+            # E2 修（v0.6）：判强度断言**取契约口径**（coverage_of_judgeable = A ÷ 可判集合，见 §9.1）。
+            # 旧实现取"较大者"（max）——那是"两个口径都低才算低"的折中，比契约更松，
+            # 于是报告可以靠多披露一个宽口径把违规抹掉。契约说的口径是哪一个，门禁就用哪一个：
+            #   · 有可判集合口径 → 用它；
+            #   · 只有 coverage_rate（旧 schema 工件）→ 退回用它，并在提示里写明实际用的是哪个。
+            # 报告里另可并排披露 coverage_of_judgeable_norule，它**只用于跨报告比较**，不参与门禁判定。
             if mjud:
-                vals.append(float(mjud.group(1)))
-            # 用"较大"的覆盖率判强度断言：两个口径都低才算真的低；
-            # 报告不得靠挑一个窄分母来给"压倒性"背书，也不该因保守分母而被误伤。
-            if vals and max(vals) < 30:
+                cov, cov_which = float(mjud.group(1)), "可判集合口径 coverage_of_judgeable（契约口径）"
+            elif mcov:
+                cov, cov_which = float(mcov.group(1)), "全部语料口径 coverage_rate（旧工件回落口径）"
+            else:
+                cov, cov_which = None, ""
+            if cov is not None and cov < 30:
                 mclaim = re.search(r"压倒性|压倒多数|舆论主体|主流立场(?:在|是)", text)
                 if mclaim:
-                    add("error", "G7", "归类覆盖率 %s 均 <30%% 却出现强度断言「%s」："
+                    add("error", "G7", "归类覆盖率 %g%% <30%%（%s）却出现强度断言「%s」："
                                        "占比只读作「可识别立场内部的相对结构」，"
                                        "不得使用主流/压倒性类措辞（CONTRACT-joint §9.1）"
-                        % ("、".join("%g%%" % v for v in vals), mclaim.group(0)))
+                        % (cov, cov_which, mclaim.group(0)))
 
     # G9 图例与渲染一致：图例声称的节点类型/日计数必须在正文真的出现
     if 'class="tl-item"' in text:
@@ -698,6 +711,48 @@ def check_joint_data(text, data_dir, fname="<string>"):
             add("error", "R5", "以下断言的裁决是「证据不足/失实」，其具名数字却在别章被当事实直陈：%s"
                                "（裁决必须回写叙事：带「网传/未经核实」限定，或删去该数字，"
                                "CONTRACT-joint §6）" % "；".join(offenders[:4]))
+
+    # ---------- G6 走势闸门（v0.6，E3）----------
+    # 判风潮把"本语料够不够谈走势"算成机器判据：selfcheck.trend_claim_forbidden
+    # （有效日不足 / 分母过小 → 禁止"走势 / 转向 / 走高 / 回落"类表述，见其 SKILL.md）。
+    # 旧实现只查报告里有没有"回落 / 平息 / 尘埃落定"这类措辞，且要报告**自称"进行中"**才查——
+    # 于是一份单日语料的报告只要不说自己"进行中"，写"热度消退"也不会有任何提示。
+    # 现在以工件的机器判据为准，不再依赖报告的自述。
+    opath = os.path.join(data_dir, "opinion.json")
+    if os.path.exists(opath):
+        op = None
+        try:
+            with open(opath, encoding="utf-8-sig") as f:
+                op = json.load(f)
+        except ValueError:
+            op = None
+        sc = (op.get("selfcheck") or {}) if isinstance(op, dict) else {}
+        if isinstance(sc, dict) and sc.get("trend_claim_forbidden"):
+            m5 = re.search(r"<h2[^>]*>[^<]*舆论观点综合[^<]*</h2>(.*?)(?=<h2)", text, re.S)
+            zone = m5.group(1) if m5 else text
+            # **免责句不是走势断言**（实测踩到两次误报）：
+            #   ①「未渲染「X」占比趋势折线：…分子残缺时折线的**走势**不代表舆论变化」
+            #     ——装配端在覆盖率不足时写的就是这句，全篇最守规矩的一句话；
+            #   ② 走势闸门提示本身：「本章不得出现**走势**表述…不写舆论演变、回落或转向」
+            #     ——把要禁的词列举出来解释禁令，反而被判成违规。
+            # 故照 R5 的办法先看上下文：被否定/免责/规避表述包住的词不算违规。
+            hedge = (r"不代表|不得|不应|不能|未渲染|禁止|无法|不足以|难以|不宜|"
+                     r"不作|不构成|无法据此|仅(?:为|作)|非(?:趋势|走势)|"
+                     r"不写|不提|不谈|不出现|不使用|不采用|避免|禁用")
+            mdet = None
+            for mm in re.finditer(r"回落|趋于平息|即将平息|热度消退|尘埃落定|走势|转向|走高|走低|"
+                                  r"持续上升|持续下降|逐步(?:上升|下降|减弱)", zone):
+                ctx = zone[max(0, mm.start() - 40): mm.end() + 40]
+                if not re.search(hedge, ctx):
+                    mdet = mm
+                    break
+            if mdet:
+                add("error", "G6", "opinion.json 判定本语料不得谈走势（selfcheck.trend_claim_forbidden=true；"
+                                   "有效日 %s / 含立场日 %s；原因：%s），但舆论章仍出现走势表述「%s」："
+                                   "有效日不足时只能写「各发布日占比」，不得写成舆论演变"
+                                   "（CONTRACT-joint §5；确有异议用 --allow G6 并记录理由）"
+                    % (sc.get("effective_days", "—"), sc.get("days_with_stance", "—"),
+                       "；".join(sc.get("reasons") or []) or "—", mdet.group(0)))
     return issues
 
 
@@ -882,19 +937,8 @@ def check_text(text, fname="<string>"):
                                      "代表性原文应只放该表）：%s…" % re.sub(r"<[^>]+>", "", cd)[:20])
 
     # ---- W15 立场卡组书写限制（.ssteps 是横向弹性槽 + .scards 等高网格 → 超长即破版）----
-    for sm in re.finditer(r'<div class="sstep">(.*?)</div>', body, re.S):
-        plain = re.sub(r"\[\d+\]", "", re.sub(r"<[^>]+>", "", sm.group(1))).strip()
-        if len(plain) > 14:
-            add("warning", "W15", 0, "立场卡组单步 %d 字超限（≤14 字，超长会换行增高并把全部卡片"
-                                     "拉伸到最高卡等高）：%s…" % (len(plain), plain[:20]))
-    for cd in re.findall(r'<article class="scard">(.*?)</article>', body, re.S):
-        n_step = len(re.findall(r'<div class="sstep">', cd))
-        if n_step > 5:
-            add("warning", "W15", 0, "立场卡组步骤数 %d 步超限（3–5 步）：%s…"
-                % (n_step, re.sub(r"<[^>]+>", "", cd)[:20]))
-        if n_step and re.search(r'class="quote-(?:txt|item)"', cd):
-            add("warning", "W15", 0, "立场卡组卡内出现引语（引语卡反模式：与第六章「高赞代表」表重复，"
-                                     "代表性原文应只放该表）：%s…" % re.sub(r"<[^>]+>", "", cd)[:20])
+    # E4 修（v0.6）：此处原先还整块重复了一遍上面 L868–882 的内容（逐字相同），
+    # 同一条违规会被报两次、warnings 计数虚高。已删重复块，只留上面那一份。
     for nt in re.findall(r'<p class="scard-note">(.*?)</p>', body, re.S):
         plain = re.sub(r"\[\d+\]", "", re.sub(r"<[^>]+>", "", nt)).strip()
         if len(plain) > 60:

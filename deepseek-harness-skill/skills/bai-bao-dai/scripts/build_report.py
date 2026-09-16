@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import re
+import sys
 from datetime import date, datetime
 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -58,6 +59,47 @@ def _ev_label(v):
 
 def esc(s):
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _opt_float(v):
+    """宽容取数：None / 空串 / 不可解析 → None。**绝不用 `or 0` 兜底**。
+
+    为什么单列一个函数：`float(x or 0)` 会把「字段缺失」和「测得 0%」压成同一个 0.0，
+    于是缺数据时报告印出的是一句凭空造出来的测量结论（A7 修的正是这个）。
+    缺失只允许在正文里写「未提供」，不允许写成数字。
+    """
+    if v is None or v == "":
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _warn(msg):
+    """需要用户处理的警告 → stderr（不混进 stdout 的进度行，便于管道判读）。"""
+    sys.stderr.write("[report] 警告：%s\n" % msg)
+
+
+def _ci_text(ci):
+    """把置信区间渲染成 `12.3–45.6`；缺数据返回 `—`（不猜、更不填 0）。
+
+    为什么自备而不复用判风潮的 `stats.fmt_ci`：跨 skill import 会**硬编码别人的目录结构**，
+    技能必须能独立分发（这正是 A6 明令禁止的那类依赖）。区间格式只有一行代码，不值得为它建耦合。
+    """
+    if not ci:
+        return "—"
+    if isinstance(ci, dict):
+        lo, hi = ci.get("lo"), ci.get("hi")
+    else:
+        try:
+            lo, hi = ci[0], ci[1]
+        except (TypeError, IndexError, KeyError):
+            return "—"
+    try:
+        return "%.1f–%.1f" % (float(lo), float(hi))
+    except (TypeError, ValueError):
+        return "—"
 
 
 def load_json(path):
@@ -575,9 +617,9 @@ def _default_intros(facts, opinion, sources, recs):
         minority = [d["stance"] for d in dist if d.get("minority")]
         m = "；少数派：" + "、".join(minority) if minority else ""
         out["opinion"] = "舆论按 %d 个立场聚类：主立场「%s」（%.1f%%）%s；视点综合见本章后半。" % (len(dist), top["stance"], top["pct"], m)
-    srcs = _collect_sources(sources, recs, _cited_sources(opinion))
+    srcs, n_cur = _collect_sources(sources, recs, _cited_sources(opinion),
+                                   cap=_source_cap())
     if srcs:
-        n_cur = len(sources or []) + len(_cited_sources(opinion))
         extra = len(srcs) - n_cur
         if extra > 0:
             out["sources"] = "来源索引共 %d 条：前 %d 条为精选信源，其后 %d 条为平台语料样本链接（供逐帖回溯；转载簇去重见第八章）；正文证据以第三章「证据源」列表呈现。A=官方/权威，B=主流，C=自媒体/样本。" % (len(srcs), n_cur, extra)
@@ -619,9 +661,12 @@ def _stance_donut(dist):
     return html, True
 
 
-def _stance_trend(dist, stance_timeline, focus=0):
+def _stance_trend(dist, stance_timeline, focus=0, detail=None):
     """趋势折线 .trend（v0.2.13，静态 SVG）：由 opinion.stance_timeline 计算
-    focus 号立场的每日占比坐标（focus 缺省 0 = 占比最高立场）。日期<2 时返回 ("", False)。"""
+    focus 号立场的每日占比坐标（focus 缺省 0 = 占比最高立场）。日期<2 时返回 ("", False)。
+
+    v0.6（T6）：`detail` = opinion.stance_timeline_detail，有它时叠加 **95% 区间带**（`.ci-band`）。
+    只给折线不给区间，读者会把逐日抖动当成真实变化——而分母只有几条时日抖动几乎全是抽样噪声。"""
     if not dist or not stance_timeline:
         return "", False
     order = [str(d.get("stance", "")) for d in dist]
@@ -678,6 +723,19 @@ def _stance_trend(dist, stance_timeline, focus=0):
         dates, vals, weights = [dates[i] for i in idx], [vals[i] for i in idx], [weights[i] for i in idx]
     hi = max(max(vals), 10.0)
     ymax = max(40.0, float(int((hi + 9) // 10 * 10)))
+    # T6：区间带。**任一日缺该立场的区间就整条不画**——半截区间带比没有更误导。
+    band_lo, band_hi = [], []
+    if isinstance(detail, dict) and detail:
+        ok = True
+        for day in dates:
+            ci = ((detail.get(day) or {}).get("ci95") or {}).get(name)
+            if not (isinstance(ci, (list, tuple)) and len(ci) == 2):
+                ok = False
+                break
+            band_lo.append(float(ci[0]))
+            band_hi.append(float(ci[1]))
+        if not ok:
+            band_lo, band_hi = [], []
     W, H = 560, 220
     x0, x1, y_top, y_bot = 46, 542, 14, 186
     span = y_bot - y_top
@@ -695,19 +753,31 @@ def _stance_trend(dist, stance_timeline, focus=0):
     dots = "".join('<circle class="dot" cx="%s" cy="%s" r="3.5" fill="%s"></circle>' % (xs[i], ys[i], color) for i in range(n))
     aria = "%s占比趋势：" % name + "，".join("%s %s%%" % (str(dates[i])[5:], round(vals[i], 1)) for i in range(n))
     area_pts = pts + " %s,%s %s,%s" % (x1, y_bot, x0, y_bot)
+    band, legend_band, band_note = "", "", ""
+    if band_lo:
+        y_hi = [round(y_bot - min(v, ymax) / ymax * span, 1) for v in band_hi]
+        y_lo = [round(y_bot - min(v, ymax) / ymax * span, 1) for v in band_lo]
+        up = " ".join("%s,%s" % (xs[i], y_hi[i]) for i in range(n))
+        dn = " ".join("%s,%s" % (xs[i], y_lo[n - 1 - i]) for i in range(n))
+        band = '<polygon class="ci-band" points="%s %s"></polygon>' % (up, dn)
+        legend_band = ('<li><i style="background:%s;opacity:.35"></i>95%% 区间（当日分母下）</li>' % color)
+        band_note = ("区间为当日分母下的 Wilson 95% 区间；<strong>两日区间重叠时，"
+                     "两天的差距不构成差异</strong>——折线上的高低不等于舆论变化。")
     html = (
         '<div class="trend">'
         '<div class="trend-head"><span class="trend-title">%s · 当日构成占比</span>'
         '<span class="trend-sub">SVG · 由 stance_timeline 生成（记录日 %s ~ %s）</span></div>'
         '<svg class="trend-svg" viewBox="0 0 %d %d" role="img" aria-label="%s">%s%s'
         '<polygon class="area" points="%s" fill="%s" fill-opacity="0.10"></polygon>'
+        '%s'
         '<polyline class="line" points="%s" stroke="%s"></polyline>%s%s</svg>'
-        '<ul class="trend-legend"><li><i style="background:%s"></i>%s 当日占比（%%）</li></ul>'
-        '<p class="caption">当日占比 = 该立场当日记录数 ÷ 当日总记录数；孤立背景坐标日与无记录日未计入。</p></div>'
+        '<ul class="trend-legend"><li><i style="background:%s"></i>%s 当日占比（%%）</li>%s</ul>'
+        '<p class="caption">当日占比 = 该立场当日记录数 ÷ 当日总记录数；孤立背景坐标日与无记录日未计入。%s</p></div>'
         % (esc(name), esc(str(dates[0])), esc(str(dates[-1])), W, H, esc(aria),
            grid, glab,
            area_pts, color,
-           pts, color, dots, xlab, color, esc(name)))
+           band,
+           pts, color, dots, xlab, color, esc(name), legend_band, band_note))
     return html, True
 
 
@@ -1063,6 +1133,20 @@ def sec_opinion_analysis(facts):
 def sec_opinion(opinion, viewpoint_md, stance_cards=None, url_ref=None):
     c = ["<h2>六、舆论观点综合</h2>"]
     url_ref = url_ref or {}
+    # T8（v0.6）：走势闸门提示放在**章首**——它是本章读法的前提。
+    # 判风潮按语料自动判定"够不够谈走势"（有效发布日不足即禁止），这里只是把它显式说出来：
+    # 否则读者看到逐日占比会自行脑补出"上升/回落"，而那正是禁止的读法。
+    # 用 aside.note（既有组件）而非新类，皮肤零改动。
+    _sc = (opinion or {}).get("selfcheck") or {}
+    if isinstance(_sc, dict) and _sc.get("trend_claim_forbidden"):
+        _th = (_sc.get("thresholds") or {}).get("trend_min_days", "—")
+        c.append('<aside class="note"><strong>本章不得出现走势表述</strong>：'
+                 '有效发布日 %s（判读门槛 %s 个有效日）%s。'
+                 '故本章只呈现「各发布日占比」，不作任何方向性判断。'
+                 '该判定由 <code>/判风潮</code> 按语料自动给出'
+                 '（<code>selfcheck.trend_claim_forbidden</code>），不是本报告作者的自我声明。</aside>'
+                 % (_sc.get("effective_days", "—"), _th,
+                    ("；理由：%s" % "；".join(_sc.get("reasons") or [])) if _sc.get("reasons") else ""))
     if opinion and opinion.get("stance_distribution"):
         dist = opinion["stance_distribution"]
         # 5.1 双栏：左条形（读精确值）右环形（看占比直觉）——v0.2.13 .chart-split/.donut
@@ -1116,7 +1200,12 @@ def sec_opinion(opinion, viewpoint_md, stance_cards=None, url_ref=None):
                     continue
                 u = str(s.get("ref_url") or s.get("url") or "").strip()
                 n = url_ref.get(u)
-                chip = (' <a href="#ref%s" class="ref">[%s]</a>' % (n, n)) if n else ""
+                if isinstance(n, tuple):       # v0.5：样本锚点域 → #sampleK
+                    kind, idx = n
+                    chip = (' <a href="#%s%s" class="ref">[%s%s]</a>'
+                            % (kind, idx, "样本" if kind == "sample" else "", idx))
+                else:
+                    chip = (' <a href="#ref%s" class="ref">[%s]</a>' % (n, n)) if n else ""
                 parts.append('<div class="quote-item"><span class="quote-like">赞%s</span>'
                              '<span class="quote-txt">%s</span>%s</div>'
                              % (esc(str(s.get("likes", ""))),
@@ -1128,10 +1217,86 @@ def sec_opinion(opinion, viewpoint_md, stance_cards=None, url_ref=None):
                      % (esc(d["stance"]), d["pct"], d["count"],
                         "是" if d.get("minority") else "—", like_pct, tops))
         c.append("</tbody></table></div>")
+        # T4（v0.6）声量与人数：条数占比回答「发了多少」，人数占比回答「多少人」——
+        # 两者差距越大，越说明声量集中在少数账号。只给条数占比，读者会把它当民意分布读。
+        _aud = opinion.get("audience_structure") or {}
+        _al = (_aud.get("layers") or {}).get("A_个人表达") or {}
+        if _al:
+            _conc = _al.get("concentration") or {}
+            _dup = _aud.get("duplication") or {}
+            c.append('<h3>声量与人数</h3>')
+            c.append('<div class="kpis">'
+                     + _kpi(esc(_al.get("records", "—")), "A 层记录", "参与占比分母的个人表达记录数")
+                     + _kpi(esc(_al.get("unique_authors", "—")), "独立作者",
+                            "去重后的账号数（「未署名」合并计为一个）")
+                     + _kpi(esc(_al.get("posts_per_author", "—")), "条 · 人比",
+                            "记录数 ÷ 独立作者数；越高说明少数账号在刷量")
+                     + _kpi(esc(_conc.get("hhi_x10000", "—")), "HHI ×10000",
+                            "作者发文份额平方和；越高越集中")
+                     + '</div>')
+            c.append('<div class="table-scroll"><table><thead><tr>'
+                     '<th>立场</th><th>条数</th><th>人数</th><th>条 · 人比</th><th>人数占比</th>'
+                     '<th>同源簇内条数</th></tr></thead><tbody>')
+            for row in (_aud.get("per_stance_by_author") or []):
+                if not isinstance(row, dict):
+                    continue
+                c.append('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
+                         % (esc(row.get("stance", "")), esc(row.get("records", "—")),
+                            esc(row.get("authors", "—")), esc(row.get("posts_per_author", "—")),
+                            ("%s%%" % row["pct_by_author"]) if row.get("pct_by_author") is not None else "—",
+                            esc(row.get("records_in_dup_clusters", "—"))))
+            c.append('</tbody></table></div>')
+            c.append('<p class="legend">口径：%s</p>' % esc(_aud.get("note") or ""))
+            if _dup:
+                c.append('<p class="legend">同源文本披露（<strong>不等于水军</strong>，须人工抽样核后才能下判断）：'
+                         '跨账号同源 %s 条 · 同账号自重复 %s 条 · 近重复合计 %s 条（占 %s%%）·'
+                         '未参与比较（文本过短）%s 条。</p>'
+                         % (esc(_dup.get("cross_account_dup_records", "—")),
+                            esc(_dup.get("same_author_repeat_records", "—")),
+                            esc(_dup.get("near_duplicate_records", "—")),
+                            esc(_dup.get("near_duplicate_pct", "—")),
+                            esc(_dup.get("not_compared_short_or_empty_text", "—"))))
+            _tops = _al.get("top_authors") or []
+            if _tops:
+                c.append('<details class="fold"><summary>发文最多的账号（前 %d）与作者主立场分布</summary>'
+                         '<div class="table-scroll"><table><thead><tr><th>账号</th><th>条数</th>'
+                         '<th>占总记录</th><th>赞合计</th><th>立场构成</th></tr></thead><tbody>'
+                         % len(_tops))
+                for t in _tops:
+                    mix = "、".join("%s %s" % (esc(k), v)
+                                    for k, v in (t.get("stance_mix") or {}).items())
+                    c.append('<tr><td>%s</td><td>%s</td><td>%s%%</td><td>%s</td><td>%s</td></tr>'
+                             % (esc(t.get("author", "")), esc(t.get("records", "—")),
+                                esc(t.get("share_of_records", "—")), esc(t.get("likes", "—")), mix))
+                c.append('</tbody></table></div></details>')
+        # T10（v0.6）差异检验：占比相邻不等于有差异。只给点估计不给区间，
+        # 读者会把一两个百分点的差当成「谁更主流」；跨 0 的必须明确写「不得声称有差异」。
+        _cmp = opinion.get("stance_comparisons") or []
+        _lines = []
+        for x in _cmp:
+            if not isinstance(x, dict):
+                continue
+            pair = x.get("pair") or []
+            if len(pair) != 2:
+                continue
+            _lines.append('%s − %s：%+.1f 个百分点（95%%CI %s）→ <strong>%s</strong>'
+                          % (esc(pair[0]), esc(pair[1]), x.get("diff_pp", 0),
+                             esc(_ci_text(x.get("ci95_pp"))), esc(x.get("verdict") or "—")))
+            if len(_lines) >= 6:
+                break
+        if _lines:
+            c.append('<p class="stat-line"><strong>立场间差异检验</strong>（同一批样本，多项口径）：%s</p>'
+                     % "；".join(_lines))
+            c.append('<p class="legend">差值用的是<strong>同一批样本内部比较</strong>的多项口径'
+                     '（不是两组独立样本公式）；区间跨 0 时<strong>不得声称有差异</strong>。'
+                     '占比表里的相邻名次不构成差异证据。</p>')
         # 5.2 焦点转移双栏：左堆叠（当日各立场条数）右趋势折线（focus=0 主立场当日占比）——v0.2.13
         st = opinion.get("stance_timeline")
         if isinstance(st, dict) and st:
             order = [d["stance"] for d in dist]
+            # T5（v0.6）：逐日结构——行内补「当日分母 / 独立作者数」。
+            # 少了分母，读者会把「占比从 60% 跳到 20%」当成舆论翻转，而它可能只是当天只有 5 条。
+            _std = opinion.get("stance_timeline_detail") or {}
             stacks_html = ['<div class="stacks" aria-label="焦点转移（立场×日期）">']
             for day in sorted(st):
                 segs = []
@@ -1139,30 +1304,99 @@ def sec_opinion(opinion, viewpoint_md, stance_cards=None, url_ref=None):
                     n = (st[day] or {}).get(sname, 0)
                     if n:
                         segs.append('<span class="stack-seg s%d" style="flex:%d"></span>' % (i, n))
+                _d0 = _std.get(day) or {}
+                meta = ('<span class="stack-meta">分母 %s · 作者 %s</span>'
+                        % (_d0.get("denominator", "—"), _d0.get("authors", "—"))) if _d0 else ""
                 stacks_html.append('<div class="stack-row"><span class="stack-date">%s</span>'
-                                   '<span class="stack-track">%s</span></div>' % (esc(day), "".join(segs)))
+                                   '<span class="stack-track">%s</span>%s</div>'
+                                   % (esc(day), "".join(segs), meta))
             stacks_html.append('<div class="stack-legend">')
             for i, sname in enumerate(order, 1):
                 stacks_html.append('<span><i class="s%d"></i>%s</span>' % (i, esc(sname)))
+            if any((_std.get(d) or {}) for d in st):
+                stacks_html.append('<span><i class="s5"></i>行右小字＝当日分母 · 独立作者数</span>')
             stacks_html.append("</div></div>")
-            # 趋势折线只在覆盖率足够时才画（v0.4）：分子残缺时画的折线既不是舆论趋势、
-            # 也不是每日相对结构，属于"用错误的数做正确的图"。
-            cov_now = float(opinion.get("coverage_of_judgeable") or opinion.get("coverage_rate") or 0)
-            if cov_now < 50:
-                c.append("\n".join(stacks_html))
-                c.append('<p class="legend">未渲染「%s」占比趋势折线：当前归类覆盖率仅 %.1f%%'
-                         '（可判集合口径），分子残缺时折线的走势不代表舆论变化。'
-                         '补足判据（词典层或规则层）后重跑即可恢复。</p>' % (order[0] if order else "主立场", cov_now))
-                trend_ok = False
-            else:
-                trend_html, trend_ok = _stance_trend(dist, st, focus=0)
+            # 趋势折线：v0.4 起"覆盖率不足就不画"，v0.6 改为**照画 + 图前警示**（T6）。
+            # 为什么改：契约要求的是"不得据此下重结论"，不是"不得呈现"。
+            # 旧行为在覆盖率不足时整块消失、只留一句"未渲染…"，读者连图都看不到——
+            # 那等于把方法缺陷藏起来，而不是把它说清楚。
+            # A7 修（v0.6）两处：
+            #   ① 口径标签各写各的——旧写法即便回落到 coverage_rate，也硬标成"可判集合口径"，
+            #      同一数字挂错口径，读者无法判断该与谁比较；
+            #   ② 两个字段都缺时**不得**回落成 0——旧写法 `... or 0` 会印出"覆盖率仅 0.0%，
+            #      分子残缺…"，那是一句凭空造出来的测量结论。改为写"—（未提供）"+ stderr 提示。
+            cov_now = _opt_float(opinion.get("coverage_of_judgeable"))
+            cov_src = "可判集合口径"
+            if cov_now is None:
+                cov_now = _opt_float(opinion.get("coverage_rate"))
+                cov_src = "占全部语料口径"
+            if cov_now is None:
+                c.append('<aside class="note">归类覆盖率 <strong>—（未提供）</strong>：'
+                         'opinion.json 缺 <code>coverage_rate</code> 与 <code>coverage_of_judgeable</code>，'
+                         '无法判断分子的完整度。下图<strong>照画</strong>，但只能读作'
+                         '「已识别部分的每日相对结构」，<strong>不得读作舆论走势</strong>。</aside>')
+                _warn("opinion.json 缺 coverage_rate / coverage_of_judgeable："
+                      "第六章已按「—（未提供）」呈现并加警示（不臆造 0.0% 覆盖率）。"
+                      "用 opinion.py 重跑可补全该口径。")
+            elif cov_now < 50:
+                c.append('<aside class="note">归类覆盖率仅 <strong>%.1f%%</strong>（%s）：'
+                         '分母残缺，下图只能读作「已识别部分的每日相对结构」，'
+                         '<strong>不得读作舆论走势</strong>。补足判据（词典层或规则层）后重跑即可提高覆盖率。</aside>'
+                         % (cov_now, cov_src))
+            trend_html, trend_ok = _stance_trend(dist, st, focus=0,
+                                                 detail=opinion.get("stance_timeline_detail"))
             if trend_ok:
                 c.append('<div class="chart-split">\n  <div>\n%s\n  </div>\n  <div>\n%s\n'
                          '  </div>\n</div>' % ("\n".join(stacks_html), trend_html))
-            elif cov_now >= 50:
+            else:
+                # 折线画不出来（有效日 <2 等）时只出堆叠条——预警 aside 已在上面给过了
                 c.append("\n".join(stacks_html))
         elif opinion.get("timeline"):
             c.append("<p>焦点时间分布见第二章时间线。</p>")
+        # T9（v0.6）事件对齐：把事件时点与前后窗口的立场结构并排放，**只作时间相邻描述**。
+        # 注意：本块**独立于 stance_timeline 是否存在**——事件对齐靠的是事件时点与语料日期，
+        # 不依赖逐日立场明细。第一版把它插进了上面那个 if/elif 中间，结果既吞掉了"无
+        # stance_timeline 时的回落句"，又让本块在无逐日明细时整块消失（canary 抓出来的）。
+        _ea = opinion.get("event_alignment") or {}
+        _evs = [e for e in (_ea.get("events") or []) if isinstance(e, dict)]
+        if _evs:
+            c.append('<h3>事件对齐（前后窗口）</h3>')
+            c.append('<div class="table-scroll"><table><thead><tr><th>事件时点</th><th>窗口（±）</th>'
+                     '<th>立场</th><th>前</th><th>后</th><th>差值（95%CI · 百分点）</th><th>判读</th>'
+                     '</tr></thead><tbody>')
+            for e in _evs:
+                ev = e.get("event") if isinstance(e.get("event"), dict) else {}
+                label = "%s %s" % (ev.get("time", "—"), ev.get("label", ""))
+                wd = e.get("window_days", "—")
+                shifts = e.get("shifts") or {}
+                if not shifts:
+                    c.append('<tr><td>%s</td><td>±%s</td><td colspan="5">%s</td></tr>'
+                             % (esc(label), esc(wd), esc(e.get("window_note") or "窗口内样本不足，仅登记时点")))
+                    continue
+                first = True
+                for st, v in shifts.items():
+                    d_pp = v.get("diff_pp")
+                    c.append('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
+                             % (esc(label) if first else "〃", esc("±%s" % wd) if first else "",
+                                esc(st),
+                                ("%s%%" % v["before_pct"]) if v.get("before_pct") is not None else "—",
+                                ("%s%%" % v["after_pct"]) if v.get("after_pct") is not None else "—",
+                                ("%+.1f（%s）" % (d_pp, esc(_ci_text(v.get("diff_ci95_pp")))))
+                                if d_pp is not None else "—",
+                                esc(v.get("verdict") or "—")))
+                    first = False
+            c.append('</tbody></table></div>')
+            # caveat **逐事件原样照录**（"仅时间相邻，不构成因果"）：这份表最容易被读成
+            # 「某事件引发了立场转变」，而脚本不做因果推断——所以这句话必须出现在表下，不能省。
+            _cav = [str(e.get("caveat") or "").strip() for e in _evs]
+            _cav = [x for x in dict.fromkeys(_cav) if x]
+            if _cav:
+                c.append('<p class="legend"><strong>读法限制</strong>：%s</p>'
+                         % "；".join(esc(x) for x in _cav))
+            if _ea.get("note"):
+                c.append('<p class="legend">%s</p>' % esc(str(_ea["note"])))
+            c.append('<p class="legend">每条事件时点必须带来源（<code>--events</code> 的 <code>source</code> 字段）；'
+                     '窗口内某侧无记录时不给出差异判断（无样本的区间没有意义）。</p>')
     else:
         c.append("<p>未提供舆论聚类数据（opinion.json 缺失或为空）。</p>")
     # 立场卡组 + 论证链带（5.1.2，v0.2.13）：结构化卡；无 --stance-cards 时按 opinion 程序化回退
@@ -1256,11 +1490,29 @@ def _split_org_title(nm):
     return nm, ""
 
 
-def _collect_sources(sources, recs, cited=None):
+# ---------- v0.5 装配开关（由 main() 从 CLI 注入） ----------
+_SOURCE_CAP = 50             # --source-cap：自动追加的平台样本上限，0 = 不追加
+_SAMPLE_ANCHORS = "sample"   # --sample-anchors：sample=样本独立锚点域（不触发门禁 W1）/ ref=旧行为
+
+
+def _source_cap():
+    return _SOURCE_CAP
+
+
+def _sample_anchors():
+    return _SAMPLE_ANCHORS
+
+
+def _collect_sources(sources, recs, cited=None, cap=50):
     """合并显式来源、被正文引用的样本地址与自动收集的 URL（去重）。
 
     自动部分的取法（v0.4 改）：按平台分层轮流取，不再"按记录顺序取前 50 条"——
     旧实现让来源索引结构性偏向微博帖文，评论/知乎/小红书样本无从回溯。
+
+    v0.5：`cap` 参数化（`--source-cap`，0 = 不追加平台样本），并返回
+    (srcs, n_cur)——n_cur 是「精选信源」的条数，其后为自动追加的平台语料样本。
+    调用方据此把样本行渲染到独立锚点域（`--sample-anchors sample`），
+    使其不再落进门禁 W1「索引有锚点但正文未引用」的判定范围。
     """
     srcs = list(sources or [])
     seen = {str(s.get("url", "")).strip() for s in srcs if str(s.get("url", "")).strip()}
@@ -1270,6 +1522,7 @@ def _collect_sources(sources, recs, cited=None):
             seen.add(u)
             srcs.append({"name": it.get("name") or "平台语料样本", "url": u,
                          "grade": it.get("grade", "C"), "type": it.get("type", "平台语料样本")})
+    n_cur = len(srcs)          # 精选信源边界：其后为自动追加的平台样本
     # 分层轮转：各平台各自成队，按队轮流取，直到额度用尽
     queues = {}
     for r in recs:
@@ -1278,7 +1531,7 @@ def _collect_sources(sources, recs, cited=None):
             continue
         seen.add(u)
         queues.setdefault(r.get("platform", "unknown"), []).append(r)
-    auto_n, cap = 0, 50
+    auto_n = 0
     while auto_n < cap and any(queues.values()):
         for p in list(queues):
             if not queues[p]:
@@ -1289,7 +1542,7 @@ def _collect_sources(sources, recs, cited=None):
             auto_n += 1
             if auto_n >= cap:
                 break
-    return srcs
+    return srcs, n_cur
 
 
 def _spotcheck_html(spotcheck, opinion=None):
@@ -1299,32 +1552,56 @@ def _spotcheck_html(spotcheck, opinion=None):
     也可以是单份 spotcheck.json（含 kind/status）。
     """
     if not spotcheck:
-        return ""
+        # A7 修（v0.6）：没有 spotcheck 时**不能什么都不说**就把占比印出去——
+        # 读者会把未校正读数读成"带误判率区间的结论"。旧行为是 `return ""`（静默）。
+        if not (opinion or {}).get("stance_distribution"):
+            return ""       # 本章连占比都没有，不硬凑一句声明（缺数据即不渲染）
+        return ('<h3>人工抽检结果（未跑）</h3>'
+                '<p class="legend">占比为未校正读数：本报告未提供 <code>spotcheck</code> 结果'
+                '（未跑人工抽检），本章百分比不带误判率区间，也不得据此下'
+                '「某一立场比另一立场更主流」这类强度结论。'
+                '补跑方式见 <code>spotcheck.py</code> 的 <code>--make</code> 与 <code>--apply</code>。</p>')
     if "kind" in spotcheck:
         spotcheck = {spotcheck.get("kind", "stance"): spotcheck}
     done = {k: v for k, v in spotcheck.items() if isinstance(v, dict) and v.get("status") == "已完成"}
     if not done:
-        return ('<h3>人工抽检（未完成）</h3><p class="legend">占比为未校正读数：'
+        return ('<h3>人工抽检结果（未完成）</h3><p class="legend">占比为未校正读数：'
                 '尚未完成人工抽检（见 <code>spotcheck.py</code>），本章百分比不带误判率区间。</p>')
     c = ["<h3>人工抽检结果</h3>",
          '<p class="legend">口径：固定随机种子分层抽样（平台 × 点赞档），逐条人工判读；'
+         '<strong>代表性样本（core）参与估计</strong>，低确定度富集样本（enrich）只用于查错、不参与估计。'
          '抽样方法与结论均存于 <code>spotcheck.json</code>，任何人可用同一种子复现同一批样本。</p>']
     bad = []
     for kind, res in done.items():
         if kind in ("stance", "rule"):
             label = "立场标签" if kind == "stance" else "规则层（口语判据）"
             c.append('<table><thead><tr><th>%s · 立场</th><th>抽样</th><th>误判</th><th>误判率</th>'
-                     '<th>可否作为主结论</th></tr></thead><tbody>' % label)
+                     '<th>95%%CI</th><th>可否作为主结论</th></tr></thead><tbody>' % label)
             for st, v in (res.get("per_stance") or {}).items():
                 ok = v.get("usable_as_main")
                 if not ok:
                     bad.append(st)
-                c.append('<tr><td>%s</td><td>%d</td><td>%d</td><td>%.1f%%</td><td>%s</td></tr>'
+                c.append('<tr><td>%s</td><td>%d</td><td>%d</td><td>%.1f%%</td>'
+                         '<td><span class="ci-band">%s</span></td><td>%s</td></tr>'
                          % (esc(st), v["n"], v["wrong"], v["error_rate"],
+                            esc(_ci_text(v.get("error_rate_ci95"))),
                             "可" if ok else '<strong>不可（>30%）</strong>'))
             c.append('</tbody></table>')
-            c.append('<p class="legend">%s 核总体误判率 <strong>%.1f%%</strong>（共判读 %d 条）。</p>'
-                     % (label, res.get("overall_error_rate", 0), res.get("n_items", 0)))
+            # T7（v0.6）：只给点估计不给区间，读者无法判断"这点误差算不算大"；
+            # 而逐条独立口径又**低估**误差（同一作者的多条判读并不独立），故两个口径都给、并指明该信哪个。
+            line = ('<p class="legend">%s 核总体误判率 <strong>%.1f%%</strong>'
+                    '（95%%CI %s，共判读 %d 条）'
+                    % (label, res.get("overall_error_rate", 0),
+                       esc(_ci_text(res.get("overall_error_rate_ci95"))), res.get("n_items", 0)))
+            cr = res.get("overall_error_rate_clustered")
+            if isinstance(cr, dict) and cr.get("p_pct") is not None:
+                line += ('；<strong>簇修正口径 %.1f%%</strong>（95%%CI %s，%s 位作者，设计效应 %s）'
+                         '——<strong>引用时优先用簇修正值</strong>：同一作者的多条判读并不独立，'
+                         '逐条独立口径会低估误差。'
+                         % (cr["p_pct"], esc(_ci_text(cr.get("ci95"))),
+                            cr.get("n_clusters", "—"), cr.get("design_effect", "—")))
+            line += '</p>'
+            c.append(line)
         else:
             c.append('<p><strong>未识别层抽样</strong>：从未识别层 %s 条中抽 %s 条人工判读，'
                      '其中 <strong>%s 条含立场表达（%.1f%%）</strong>，%s 条不含（纯反应/玩笑/信息）。'
@@ -1339,14 +1616,61 @@ def _spotcheck_html(spotcheck, opinion=None):
             if mix:
                 c.append('<p class="legend">样本内构成：%s（据此可知被漏掉的主要是哪一支）。</p>'
                          % "、".join("%s %d 条" % (esc(k), v) for k, v in mix.items()))
+    # T7（v0.6）：富集对照——低确定度样本专门用来**查错**，它的误判率与代表性样本之差
+    # 回答"漏检有多严重"。它**不代表总体**，所以单独成段并显式标注非代表性。
+    enr = [(k, r["enrich"]) for k, r in done.items()
+           if isinstance(r.get("enrich"), dict) and (r["enrich"].get("n_enrich") or 0)]
+    if enr:
+        labels = {"stance": "立场标签", "rule": "规则层", "unclassified": "未识别层"}
+        c.append('<p><strong>富集对照（非代表性，只用于查错）</strong></p>')
+        c.append('<div class="table-scroll"><table><thead><tr><th>核</th><th>富集量</th>'
+                 '<th>富集误判率</th><th>代表性样本误判率</th><th>差值（95%CI · 百分点）</th>'
+                 '<th>判读</th></tr></thead><tbody>')
+        for kind, e in enr:
+            d_pp = e.get("diff_pp")
+            c.append('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
+                     % (esc(labels.get(kind, kind)), e.get("n_enrich", "—"),
+                        ("%.1f%%" % e["enrich_rate_pct"]) if e.get("enrich_rate_pct") is not None else "—",
+                        ("%.1f%%" % e["core_rate_pct"]) if e.get("core_rate_pct") is not None else "—",
+                        ("%+.1f（%s）" % (d_pp, esc(_ci_text(e.get("diff_ci95_pp")))))
+                        if d_pp is not None else "—",
+                        esc(e.get("verdict") or "—")))
+        c.append('</tbody></table></div>')
+        c.append('<p class="legend">富集样本是<strong>故意偏向低确定度</strong>的抽样，'
+                 '<strong>不代表总体</strong>：它只回答「错都错在哪」，不能拿来估总体误判率。'
+                 '差值跨 0 时不得声称富集段更差——该结论要求区间整体落在 0 的某一侧。</p>')
+
+    # T7（v0.6）：编码信度——两个人判同一批样本。κ / α 低说明**立场定义本身没对齐**，
+    # 此时误判率里混着"定义分歧"，不能一概读成模型判错。
+    ic_rows = []
+    for kind, r in done.items():
+        ic = r.get("intercoder")
+        if not (isinstance(ic, dict) and ic.get("status") == "已完成"):
+            continue
+        lbl = {"stance": "立场标签", "rule": "规则层", "unclassified": "未识别层"}.get(kind, kind)
+        ic_rows.append('%s：Cohen κ <strong>%s</strong> · Krippendorff α <strong>%s</strong>%s'
+                       % (esc(lbl), ic.get("cohen_kappa"), ic.get("krippendorff_alpha"),
+                          ("（%s）" % esc(ic["reading"])) if ic.get("reading") else ""))
+    if ic_rows:
+        c.append('<p class="legend"><strong>编码信度</strong>（第二判读人独立判读同一批样本）：%s。'
+                 'κ / α 偏低说明<strong>立场定义本身没对齐</strong>——此时误判率里混着「定义分歧」，'
+                 '不能一概读成模型判错。</p>' % "；".join(ic_rows))
     if bad:
         c.append('<p class="legend">⚠ 抽检发现以下立场误判率 >30%%，<strong>不得作为主结论呈现</strong>：%s。</p>'
                  % "、".join(esc(x) for x in sorted(set(bad))))
     return "\n".join(c)
 
 
-def sec_sources(srcs):
+def sec_sources(srcs, n_cur=0):
+    """来源索引表。
+
+    v0.5：`n_cur` 之后的条目是自动追加的「平台语料样本」（供逐帖回溯）。
+    当 --sample-anchors sample 时，这些行改用独立锚点域 `id="sampleK"`，
+    不再作为 `id="refK"` 落进门禁 W1 的「锚点必须被正文引用」判定；
+    分级 class（source-C）保留，底色与斑马纹不受影响。
+    """
     c = ["<h2>七、来源索引</h2>"]
+    sample_mode = (_sample_anchors() == "sample")
     if not srcs:
         c.append("<p>无来源记录。</p>")
     else:
@@ -1359,6 +1683,10 @@ def sec_sources(srcs):
         bits = ["来源共 <strong>%d</strong> 条" % len(srcs)]
         if any(grades.values()):
             bits.append("A官方 %d · B主流 %d · C自媒体+样本 %d" % (grades["A"], grades["B"], grades["C"]))
+        extra = len(srcs) - n_cur
+        if sample_mode and n_cur and extra > 0:
+            bits.append("其中精选信源 %d 条（[1]–[%d]）· 平台语料样本 %d 条（独立锚点 样本1–样本%d）"
+                        % (n_cur, n_cur, extra, extra))
         c.append('<p class="stat-line">%s</p>' % " ｜ ".join(bits))
         c.append('<div class="table-scroll"><table><thead><tr><th>编号</th><th>来源 / 平台</th><th>标题摘要</th>'
                  '<th>分级</th><th>原文</th></tr></thead><tbody>')
@@ -1366,6 +1694,9 @@ def sec_sources(srcs):
         for i, s in enumerate(srcs, 1):
             g = str(s.get("grade", "")).strip().upper()
             cls = ' class="source-%s"' % g if g in ("A", "B", "C") else ""
+            is_sample = sample_mode and i > n_cur
+            anchor = ("sample%d" % (i - n_cur)) if is_sample else ("ref%d" % i)
+            label = ("样本%d" % (i - n_cur)) if is_sample else ("[%d]" % i)
             # 来源/标题拆列（v0.4 修）：先认《》配对，书名号内的「：/｜」不是列分隔符——
             # 旧实现按第一个冒号硬切，`《人民锐评：四岁男童的肢体接触…》` 会把标题切进来源列，表格裂行。
             org, title = _split_org_title(str(s.get("name", "")).strip())
@@ -1378,11 +1709,21 @@ def sec_sources(srcs):
             ff = str(s.get("fetched_file", "")).strip()
             if ff:
                 link_html += '<span class="ref" title="已归档正文：sources/%s" aria-label="已归档">⌸</span>' % esc(ff)
-            c.append('<tr id="ref%d"%s><td>[%d]</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
-                     % (i, cls, i, esc(org), esc(title), gname.get(g, g), link_html))
+            row_cls_parts = []
+            if g in ("A", "B", "C"):
+                row_cls_parts.append("source-%s" % g)
+            if is_sample:
+                row_cls_parts.append("ref-sample")
+            row_cls = (' class="%s"' % " ".join(row_cls_parts)) if row_cls_parts else ""
+            c.append('<tr id="%s"%s><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
+                     % (anchor, row_cls, esc(label), esc(org), esc(title), gname.get(g, g), link_html))
         c.append("</tbody></table></div>")
+        if sample_mode and n_cur and extra > 0:
+            c.append('<p class="legend">编号 [1]–[%d] 为精选信源，正文引用（第二章时间线、第三章断言、'
+                     '第五章观点辨析）一律指向这一区间；「样本N」为装配端按平台分层追加的语料样本链接，'
+                     '仅供逐帖回溯，不承担举证角色。</p>' % n_cur)
         # 复用度（v0.4）：只露一次面的来源数——"来源共 N 条"会被读成举证面很宽，需给出分布
-        used = [len([x for x in (s.get("used_as") or [])]) for s in srcs]
+        used = [len([x for x in (s.get("used_as") or [])]) for s in srcs[:n_cur] or srcs]
         if any(used):
             once = sum(1 for u in used if u <= 1)
             many = sum(1 for u in used if u >= 5)
@@ -1431,16 +1772,21 @@ def sec_coverage(facts, recs, coverage_md, compliance=None):
 
 
 def sec_method():
+    # T11（v0.6）：措辞更新——原先写「舆论把握：按立场词典单标签聚类…本 HTML 九章结构」，
+    # 既没提立场分析已由 /判风潮 承担，章数也早已从九章变十章（读者据此核对目录会以为报告少了章）。
     return ("<h2>九、方法论</h2>"
-            "<p>本报告由 bai-bao-dai（百宝袋）四阶段流水线生成：</p>"
+            "<p>本报告由 bai-bao-dai（百宝袋）流水线装配；舆论立场部分由 <code>/判风潮</code> 产出。</p>"
             "<ol><li><strong>采集</strong>：知乎内嵌爬虫 / MediaCrawler（微博·小红书）关键词搜索，仅限公开信息；</li>"
             "<li><strong>事实还原</strong>：多源交叉与证据分级（china_sources 初查 + LLM 逐条裁决：真实/部分真实/失实/证据不足）；</li>"
-            "<li><strong>舆论把握</strong>：按立场词典单标签聚类（命中关键词最多者胜），识别 &lt;10% 少数派；</li>"
-            "<li><strong>综合报告</strong>：本 HTML 九章结构。</li></ol>"
+            "<li><strong>舆论立场</strong>：立场体系与判读标准见 <code>codebook.md</code>（按事件定制）；"
+            "单标签聚类的分母为「A 个人表达样本」，机构帖与未识别残差均不进分母；"
+            "归类覆盖率、抽检误判率与编码信度由 <code>/判风潮</code> 执行并回填 <code>opinion.json</code>；"
+            "本报告只做呈现与口径披露，<strong>不重算立场数字</strong>；</li>"
+            "<li><strong>综合报告</strong>：本 HTML 十章结构。</li></ol>"
             '<p class="legend">确定性标记：▲官方确认 / ●多源一致 / △单源存疑。未确认信息不伪装成事实。</p>')
 
 
-def sec_timestamp(recs):
+def sec_timestamp(recs, opinion=None):
     c = ["<h2>十、信息与生成时间戳</h2>", '<div class="meta-box"><dl>']
     c.append(f"<dt>报告生成</dt><dd>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</dd>")
     times = [str(r.get("time", ""))[:10] for r in recs if r.get("time")]
@@ -1448,6 +1794,28 @@ def sec_timestamp(recs):
         c.append(f"<dt>信息截止</dt><dd>{esc(max(times))}（最后一条采集记录时间；搜索引擎索引有延迟，结论可能滞后）</dd>")
     else:
         c.append("<dt>信息截止</dt><dd>未知（数据缺时间戳）</dd>")
+    # T12（v0.6）工件指纹：让读者能回答「这份数字是怎么来的」。
+    # **只印哈希前缀与角色名，绝不印绝对路径**——路径会泄漏用户名与本机目录结构，
+    # 而指纹的用途只是"内容有没有变"，路径对它没有信息量（E8 同源处置）。
+    man = (opinion or {}).get("run_manifest") or {}
+    if isinstance(man, dict) and man:
+        _ins = [x for x in (man.get("inputs") or []) if isinstance(x, dict)]
+        if _ins:
+            c.append("<dt>输入指纹</dt><dd>%s</dd>"
+                     % " · ".join("%s <code>%s</code>"
+                                  % (esc(os.path.basename(str(x.get("role") or "—"))),
+                                     esc(str(x.get("sha256") or "")[:12])) for x in _ins))
+        if man.get("vocabulary_sha256"):
+            c.append("<dt>词表指纹</dt><dd><code>%s</code></dd>"
+                     % esc(str(man["vocabulary_sha256"])[:12]))
+        _scr = man.get("script") or {}
+        if isinstance(_scr, dict) and _scr.get("sha256"):
+            c.append("<dt>脚本指纹</dt><dd><code>%s</code>（%s）</dd>"
+                     % (esc(str(_scr["sha256"])[:12]),
+                        esc(os.path.basename(str(_scr.get("name") or "—")))))
+        c.append('<dt>指纹读法</dt><dd>均为 sha256 前 12 位；同一语料同一参数必须产生同一批指纹。'
+                 '注意：抽检 <code>--apply</code> 会回写 <code>opinion.json</code>，'
+                 '故它自己的指纹在抽检前后<strong>必然不同</strong>，核对时要连抽检一起核。</dd>')
     c.append("</dl></div>")
     return "\n".join(c)
 
@@ -1876,9 +2244,20 @@ def build_content(event, facts, opinion, sources, recs, viewpoint_md, coverage_m
     rail_html = _actors_rail_html(actors_rail, verdicts) if actors_rail else ""
     track_html = _track_html(track or {})
     # 来源索引先算一次（v0.3）：ch5 高赞代表需要 url→refN 映射，而索引渲染在 ch5 之后
-    srcs = _collect_sources(sources, recs, _cited_sources(opinion))
-    url_ref = {str(s.get("url", "")).strip(): i for i, s in enumerate(srcs, 1)
-               if str(s.get("url", "")).strip()}
+    srcs, _n_cur = _collect_sources(sources, recs, _cited_sources(opinion),
+                                    cap=_source_cap())
+    # v0.5：样本独立锚点域时，url_ref 的值改为 (锚点前缀, 序号) 二元组，
+    # 由 sec_opinion 渲染为 #sampleK；否则交给旧行为（整数 → #refK）。
+    if _sample_anchors() == "sample":
+        url_ref = {}
+        for i, s in enumerate(srcs, 1):
+            u = str(s.get("url", "")).strip()
+            if not u:
+                continue
+            url_ref[u] = ("sample", i - _n_cur) if i > _n_cur else ("ref", i)
+    else:
+        url_ref = {str(s.get("url", "")).strip(): i for i, s in enumerate(srcs, 1)
+                   if str(s.get("url", "")).strip()}
     secs = [
         sec_overview(event, facts, opinion, recs, abstract_text, data_meta),
         sec_timeline(opinion, recs, milestones, data_meta),
@@ -1886,10 +2265,10 @@ def build_content(event, facts, opinion, sources, recs, viewpoint_md, coverage_m
         sec_check(facts),
         sec_opinion_analysis(facts),
         sec_opinion(opinion, viewpoint_md, stance_cards, url_ref),
-        sec_sources(srcs),
+        sec_sources(srcs, _n_cur),
         sec_coverage(facts, recs, coverage_md, compliance),
         sec_method(),
-        sec_timestamp(recs),
+        sec_timestamp(recs, opinion),
     ]
     titles = ["结论速览", "事件时间线", "核心事实汇编", "事实核查结果", "观点辨析与推理说明",
               "舆论观点综合", "来源索引", "覆盖完整性声明", "方法论", "信息与生成时间戳"]
@@ -2004,13 +2383,31 @@ def main():
     ap.add_argument("--abstract", default="", help="事件摘要 markdown（自动识别：结构化标签式——标签单独成段写 **一句话结论** 等、后空行接内容；或旧两段式——空行分段，段一事件→进展→舆论、段二真实性→结构提示）")
     ap.add_argument("--timeline-milestones", default="", help="竖式里程碑时间轴 json：[{date,type,tag,title,text,count}]（可选；缺省回退日期×记录数表）")
     ap.add_argument("--nav-drawer", dest="nav_drawer", action=argparse.BooleanOptionalAction, default=True, help="右侧毛玻璃悬浮目录（默认开；--no-nav-drawer 关闭）")
-    ap.add_argument("--joint", action="store_true", help="三技能联合任务模式：注入联合 meta 标记，且必须提供 --compliance 合规账本（CONTRACT-joint）")
+    ap.add_argument("--joint", action="store_true", help="联合任务模式（④ 装配）：注入联合 meta 标记，且必须提供 --compliance 合规账本（CONTRACT-joint）")
     ap.add_argument("--compliance", default="", help="采集合规账本 json（联合任务必需）：[{platform,status,block,escalated,user_confirmed,alternative,note}]")
+    ap.add_argument("--source-cap", type=int, default=50,
+                    help="自动追加的平台语料样本上限（v0.5，默认 50；0 = 不追加。"
+                         "样本用于逐帖回溯，不承担举证角色）")
+    ap.add_argument("--sample-anchors", choices=("sample", "ref"), default="sample",
+                    help="平台样本的锚点域（v0.5，默认 sample）：sample = 样本行用独立锚点 id=\"sampleK\"，"
+                         "不再落进门禁 W1「索引有锚点但正文未引用」的判定；ref = 旧行为（样本与精选信源共用 refN）")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
+    global _SOURCE_CAP, _SAMPLE_ANCHORS
+    _SOURCE_CAP = max(0, int(args.source_cap))
+    _SAMPLE_ANCHORS = args.sample_anchors
+
     facts = load_json(args.facts)
     opinion = load_json(args.opinion)
+    # A7 修（v0.6）：舆论工件的**必需字段只认 coverage_rate / denominator**。
+    # coverage_of_judgeable 是可选口径（正例夹具那样的旧 schema 就没有它）——
+    # 若把它列为必需，冻结的 checks/positive/build.py 会直接打挂，且旧工件再也装配不了。
+    if isinstance(opinion, dict) and opinion.get("stance_distribution"):
+        _miss = [k for k in ("coverage_rate", "denominator") if opinion.get(k) is None]
+        if _miss:
+            _warn("opinion.json 缺必需字段 %s：第六章按「—（未提供）」呈现，"
+                  "不用 0 充数（占比缺分母或完整度时不得作结论）。" % "、".join(_miss))
     sources = load_json(args.sources)
     recs, data_meta = load_relevant(args.normalized)
     intros = load_json(args.intros)
@@ -2075,7 +2472,7 @@ def main():
     # v0.2.13：折叠渐缓弹出 + 引用悬停气泡（无目标时安全空转）
     html = html.replace("</body>", _fold_js() + _refpop_js() + "\n</body>")
     if args.joint:
-        html = html.replace("</head>", '<meta name="dsh-report" content="joint;contract=joint-v0.5">\n</head>', 1)
+        html = html.replace("</head>", '<meta name="dsh-report" content="joint;contract=joint-v0.6">\n</head>', 1)
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
@@ -2085,5 +2482,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import sys
     sys.exit(main())

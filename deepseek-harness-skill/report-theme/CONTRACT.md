@@ -113,7 +113,7 @@ LLM 深度内容（viewpoint/coverage/abstract）写作时只写 md，**表格�
 python "~/.dsh/report-theme/check_report.py" "输出.html"
 ```
 
-### 6.3 三技能综合报告（装配路径，规划中）
+### 6.3 多技能联合报告（装配路径，规划中）
 目标：多技能产物经统一装配器（`assemble_report.py`，manifest JSON 定义章节/引用/元数据）合并输出，
 替代「手工把多份产物粘贴进模板」——后者是 CONTENT_END 残留、双标题、ref 分级缺失等结构性缺陷的直接来源。
 装配器输出自动满足 §1–§5，并内联跑 check_report。

@@ -4,8 +4,10 @@
 按用户要求（如"自检 / 先测下工具 / 检查环境"）运行。两层：
 
 - 离线层（--offline）：环境与本地工具链——用内置微型夹具跑通
-  normalize → opinion → build_report，证明本地脚本完好；另报 check.py
+  normalize → build_report，证明本地脚本完好；另报 check.py
   可选依赖 china_sources（po-xu-wang 未装则降级为 LLM 多源核查，不影响主流程）。
+  **阶段 3（舆论把握）已迁至独立技能 `/判风潮`**，故离线链路里不再有 opinion 步骤；
+  为让装配端第六章照常渲染，这里喂一份**预制的最小 opinion 夹具**（不调任何脚本）。
 - 在线层（默认执行，--skip-online 跳过）：对网络采集工具做最小真实尝试——
   微博/小红书：各驱动 MediaCrawler 做 1 条关键词搜索（复用 collect.py 凭据检测）；
   知乎：cookie 文件存在性（静态）＋ 若 config.json 的 probe.zhihu_question
@@ -25,6 +27,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(SKILL_DIR, "scripts")
@@ -64,9 +67,23 @@ XHS_JSONL = [
      "liked_count": "500", "comment_count": "20", "share_count": "3",
      "note_url": "https://www.xiaohongshu.com/explore/x1", "nickname": "小红用户C", "source_keyword": "自检"},
 ]
-STANCES = {
-    "支持加装": ["支持加装", "方便老人", "老人上下楼"],
-    "一楼住户反对": ["一楼", "采光", "噪音", "不公平", "反对"],
+# 预制的最小舆情工件（阶段 3 迁出后不再由本技能生成，改为内置夹具）
+OPINION_FIXTURE = {
+    "event": "自检", "total_records": 3, "denominator": 2,
+    "coverage_rate": 66.7, "coverage_of_judgeable": 66.7, "judgeable_denominator": 3,
+    "stance_distribution": [
+        {"stance": "支持加装", "count": 1, "pct": 50.0, "likes": 10, "like_pct": 55.6,
+         "minority": False, "top_samples": []},
+        {"stance": "一楼住户反对", "count": 1, "pct": 50.0, "likes": 8, "like_pct": 44.4,
+         "minority": False, "top_samples": []},
+    ],
+    "timeline": {"2025-06-01": 2, "2025-06-02": 1},
+    "stance_timeline": {"2025-06-01": {"支持加装": 1}, "2025-06-02": {"一楼住户反对": 1}},
+    "institutional_layer": {"count": 0, "reasons": {}},
+    "residual": {"count": 1, "pct_of_total": 33.3,
+                 "composition": {"纯反应（短句/表情/链接）": 1, "原样转述（长文报道口径）": 0,
+                                 "未分类（待抽样人工核）": 0}},
+    "note": "自检夹具：非真实分析结果，仅用于验证装配链路可用。",
 }
 
 
@@ -77,10 +94,38 @@ def run_script(name, *args):
                           errors="replace", env=env)
 
 
+def _mkworkdir(prefix):
+    """建一个**真的写得进去**的工作目录，返回其路径。
+
+    坑（实测）：不能只看 `tempfile.mkdtemp()` 有没有抛异常——受限沙箱下它**建目录会成功、
+    往里写才被拒**，于是离线层在 `os.makedirs(raw/platform)` 处抛 PermissionError，
+    整层报错。那是**权限阻隔**却被读成"工具失败"，进而误触发"跳过工具"流程。
+    故必须**探针写一次**才算数；顺序：系统临时目录 → 本技能内 `tests/_tmp/`（工作区内）。
+    """
+    candidates = []
+    try:
+        candidates.append(tempfile.mkdtemp(prefix=prefix))
+    except (PermissionError, OSError):
+        pass
+    fallback = os.path.join(SKILL_DIR, "tests", "_tmp", prefix + uuid.uuid4().hex[:8])
+    os.makedirs(fallback, exist_ok=True)
+    candidates.append(fallback)
+    for c in candidates:
+        try:
+            probe = os.path.join(c, ".write_probe")
+            with open(probe, "w", encoding="utf-8") as f:
+                f.write("ok")
+            os.remove(probe)
+            return c
+        except (PermissionError, OSError):
+            continue
+    raise PermissionError("找不到可写工作目录（系统临时目录与本技能 tests/_tmp 均不可写）")
+
+
 def offline_checks(results):
-    """本地工具链最小尝试：normalize → opinion(--stances) → build_report。返回是否失败。"""
+    """本地工具链最小尝试：normalize → build_report（阶段 3 已迁出）。返回是否失败。"""
     any_fail = False
-    tmp = tempfile.mkdtemp(prefix="bbd_selftest_offline_")
+    tmp = _mkworkdir("bbd_selftest_offline_")
     try:
         raw = os.path.join(tmp, "raw")
         for plat in ("zhihu", "weibo", "xiaohongshu"):
@@ -91,9 +136,6 @@ def offline_checks(results):
             f.write("\n".join(json.dumps(x, ensure_ascii=False) for x in WEIBO_JSONL) + "\n")
         with open(os.path.join(raw, "xiaohongshu", "c.jsonl"), "w", encoding="utf-8") as f:
             f.write("\n".join(json.dumps(x, ensure_ascii=False) for x in XHS_JSONL) + "\n")
-        st_path = os.path.join(tmp, "stances.json")
-        with open(st_path, "w", encoding="utf-8") as f:
-            json.dump(STANCES, f, ensure_ascii=False, indent=2)
         facts = os.path.join(tmp, "facts.json")
         with open(facts, "w", encoding="utf-8") as f:
             json.dump({"event": "自检", "claims": []}, f, ensure_ascii=False)
@@ -101,11 +143,12 @@ def offline_checks(results):
         norm = os.path.join(tmp, "data.jsonl")
         opinion = os.path.join(tmp, "opinion.json")
         report = os.path.join(tmp, "report.html")
+        # 预制夹具（不调任何脚本）：阶段 3 已迁出，本技能不再生成 opinion 工件
+        with open(opinion, "w", encoding="utf-8") as f:
+            json.dump(OPINION_FIXTURE, f, ensure_ascii=False, indent=2)
 
         steps = [
             ("normalize", ["--in", raw, "--out", norm, "--event", "自检"], norm),
-            ("opinion", ["--in", norm, "--out", opinion, "--event", "自检",
-                         "--stances", st_path], opinion),
             ("build_report", ["--event", "自检", "--facts", facts, "--opinion", opinion,
                               "--normalized", norm, "--out", report], report),
         ]
@@ -188,7 +231,7 @@ def mediacrawler_check(platform, results):
     probe_dir = os.path.join(tempfile.gettempdir(), "bbd_selftest_online")
     os.makedirs(probe_dir, exist_ok=True)
     try:
-        rc, n = collect.run_mediacrawler(platform, "测试", probe_dir, 1, "", "", False, 180)
+        rc, n, _state = collect.run_mediacrawler(platform, "测试", probe_dir, 1, "", "", False, 180)
         good = rc == 0 and n >= 1
         detail = ""
         if rc == 2:

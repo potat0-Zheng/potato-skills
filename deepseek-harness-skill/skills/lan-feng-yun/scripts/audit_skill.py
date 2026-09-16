@@ -58,6 +58,14 @@ ARTIFACTS = [
     ("coverage.md", r"coverage\.md|--coverage", "lan-feng-yun"),
     ("viewpoint.md", r"viewpoint\.md|--viewpoint", "lan-feng-yun"),
     ("facts.json", r"facts\.json", "po-xu-wang"),
+    # v0.6：舆论立场分析的工件已随技能迁出——**定义方改为 pan-feng-chao（判风潮）**。
+    # 不登记的话，体检 lan-feng-yun / bai-bao-dai / po-xu-wang 时会去自家 SKILL.md 里
+    # 找 opinion.json / spotcheck 的 schema，找不到就报「缺口」——而它本来就不该在那儿
+    # （这正是本文件 L50-52 记的那个误报模式：按错误的定义方核验，缺口全是假的）。
+    ("opinion.json", r"opinion\.json", "pan-feng-chao"),
+    ("spotcheck_{stance,rule,unclassified}.json",
+     r"spotcheck(?:_\{?(?:stance|rule|unclassified)\}?)?\.json", "pan-feng-chao"),
+    ("codebook.md", r"codebook\.md", "pan-feng-chao"),
 ]
 
 # 版本标记识别：先删掉"长得像版本号其实是指标符"的片段，再取版本词。
@@ -168,10 +176,15 @@ def audit(skill="lan-feng-yun", root=None):
         p = os.path.join(sk, skill, rel)
         out["B_refs"].append({"kind": "reference", "ref": rel, "line": text[:m.start()].count("\n") + 1,
                               "exists": os.path.exists(p), "title": ""})
-    for m in re.finditer(r"`?scripts[/\\]([a-z_]+\.py)", text):
-        fn = m.group(1)
-        p = os.path.join(sk, skill, "scripts", fn)
-        out["B_refs"].append({"kind": "script", "ref": "scripts/%s" % fn, "line": text[:m.start()].count("\n") + 1,
+    # 脚本路径：**跨技能路径也要认**。舆论脚本已迁到 pan-feng-chao，本技能正文里的
+    # `skills/pan-feng-chao/scripts/opinion.py` 是合法引用；旧正则只认 `scripts/xxx.py`
+    # 的相对形式，会把它当成本技能目录下的路径，于是每一处跨技能引用都被报成"目标不存在"。
+    for m in re.finditer(r"`?(?:(skills[/\\]([a-z0-9\-]+)[/\\])?)scripts[/\\]([a-z_]+\.py)", text):
+        other, fn = m.group(2), m.group(3)
+        p = (os.path.join(sk, other, "scripts", fn) if other
+             else os.path.join(sk, skill, "scripts", fn))
+        ref = ("skills/%s/scripts/%s" % (other, fn)) if other else ("scripts/%s" % fn)
+        out["B_refs"].append({"kind": "script", "ref": ref, "line": text[:m.start()].count("\n") + 1,
                               "exists": os.path.exists(p), "title": ""})
 
     # ---- C schema 覆盖率 ----

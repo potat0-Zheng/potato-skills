@@ -1,6 +1,6 @@
 {
   "skill_name": "bai-bao-dai",
-  "skill_desc": "百宝袋：热点事件多方信息汇总与视点综合分析工具（采集→事实还原→舆论把握→综合报告）",
+  "skill_desc": "百宝袋：热点事件多平台信息汇总与综合报告装配工具（采集→归一化→语料治理→事实还原→综合报告装配；舆论立场类分析由 /判风潮 承担）",
   "platforms": {
     "weibo": {
       "enabled": true,
@@ -33,8 +33,6 @@
     "max_delay_s": 5,
     "max_requests_per_day": 500
   },
-  "stance_keywords": {},
-  "stance_note": "立场词典必须按事件定制：采集后由 LLM 依据实际观点分歧构造 {立场: [关键词,...]}，经 opinion.py --stances <stances.json> 传入（'无关/其他' 兜底由脚本自动补）。默认留空；为空时 opinion.py 将报错退出，不做静默错误归类。",
   "policy_tools": {
     "enabled": true,
     "modules_dir": "scripts/policy",

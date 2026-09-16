@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><!-- TITLE --></title>
-<!-- theme-v: 0.2.18 -->
+<!-- theme-v: 0.2.19 -->
 <!-- 本文件由 sync_theme.py 从 ~/.dsh/report-theme/ 同步分发。请勿手工修改各 skill 内的副本；
      修改皮肤请改主模板 report-theme/report_template.html，然后运行 report-theme/sync_theme.py。 -->
 <!-- v0.2.18 主体轨道网格（--actors v2 对象形态）：新增 .rail-card / .rail-head / .rail-actors / .racard / table.rail / .rn / .rail-cross / .rn-legend 组件族
@@ -258,6 +258,12 @@
   .stack-legend i.s1 { background: #b0573b; } .stack-legend i.s2 { background: #8a6512; }
   .stack-legend i.s3 { background: #66794f; } .stack-legend i.s4 { background: #3d3d3a; }
   .stack-legend i.s5 { background: #d1cfc5; } .stack-legend i.s6 { background: #87786a; }
+  /* 逐日分母 / 作者数小字（v0.2.19，T1）：.stack-row 右侧一格。
+     扩列只在**真的带了 .stack-meta** 时发生（:has），没带的行渲染与 v0.2.18 逐像素一致——
+     这是"皮肤只增不改"的落地方式：新组件不得改动既有行的排版。 */
+  .stack-row:has(> .stack-meta) { grid-template-columns: 96px minmax(0,1fr) max-content; }
+  .stack-meta { font-family: var(--mono); font-size: 10.5px; color: var(--gray-500); white-space: nowrap; }
+  @media (max-width: 880px) { .stack-row:has(> .stack-meta) { grid-template-columns: 1fr; gap: 3px; } }
 
   /* ═══════════════════ 可视化补充（v0.2.13）：双栏 .chart-split / 环形 .donut / 趋势线 .trend ═══════════════════ */
   /* 图表双栏：左条右环 / 左堆叠右趋势；上下居中（与对侧图中心对齐），≤880px 塌成单列 */
@@ -284,6 +290,14 @@
   .trend .area { stroke: none; }
   .trend .dot { stroke: var(--paper); stroke-width: 1.5; }
   .trend .s1 { stroke: #b0573b; } .trend .s2 { stroke: #8a6512; } .trend .s3 { stroke: #66794f; } .trend .s4 { stroke: #3d3d3a; }
+  /* 95% 区间带（v0.2.19，T2）：同一个类两种用法，靠**元素上下文**区分，不靠第二个类名——
+     ① 趋势图内：SVG polygon.ci-band（低透明度填充；不得加描边，否则会盖住折线本身）
+     ② 表格/正文内：span.ci-band 区间徽章（读数用，例如「36.5–75.5」）
+     两处选择器都带元素限定，所以 SVG 的 polygon 规则不会污染正文里的 span，反之亦然。 */
+  .trend .ci-band { fill: var(--clay); opacity: .13; stroke: none; }
+  .trend .ci-band.s2 { fill: #8a6512; } .trend .ci-band.s3 { fill: #66794f; } .trend .ci-band.s4 { fill: #3d3d3a; }
+  span.ci-band { display: inline-block; padding: 1px 7px; border-radius: 999px; background: #f6e9dd;
+                 color: #a44a2e; font-family: var(--mono); font-size: 11px; white-space: nowrap; }
   .trend-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: .5em 0 0; padding: 0; list-style: none; }
   .trend-legend li { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--gray-700); }
   .trend-legend i { width: 16px; height: 2.5px; border-radius: 2px; background: var(--clay); flex: none; }
@@ -578,6 +592,7 @@
      - 折叠（长原文/长列表收纳）：<details class="fold"><summary>展开原文</summary><blockquote>…</blockquote></details>（打印时自动展开；渐缓弹出由装配端 fold-replay JS 以 WAAPI 实现——CSS animation 在 details 隐藏子树不重放，故必须用命令式动画，片段见演示稿内联脚本；无 JS 时回退原生瞬开）
      - P1 可视化（build_report 自动输出，纯 CSS）：立场条形 .bars/.bar-row/.bar-fill；小结行 .stat-line；覆盖矩阵 table.matrix 之 .cell-ok/.cell-miss/.cell-gap；焦点堆叠 .stacks/.stack-row/.stack-seg(.s1-.s6)/.stack-legend（图例色块 <i class="s1..s6"> 与段色一致，v0.2.13 起支持）；冲突对照 table.conflict
      - 可视化补充（v0.2.13）：双栏 .chart-split（两列图表区，≤880px 单列）；环形图 = .donut（inline conic-gradient 百分比直转 deg 分段）+ .donut-legend（色块图例，可含 <b> 数值）；趋势折线 = .trend 容器（.trend-head 标题/副注 + svg.trend-svg：网格 .grid-line、折线 .line(.s1-.s4)、面积 polygon.area、数据点 .dot、坐标轴 <text> + .trend-legend），SVG 坐标由生成端按数据计算（--stance-trend），LLM 手写需自算坐标、不建议
+     - 区间与逐日小字（v0.2.19，T1/T2）：① 逐日分母/作者数 = 在 .stack-row 内追加 <span class="stack-meta">当日分母 205 · 作者 63</span>（只在带了该元素的行扩列，未带的行排版与 v0.2.18 一致）；② 95% 区间 = 趋势图内 <polygon class="ci-band"> 低透明度填充带（跟折线同色系 .s1–.s4，**不得加描边**，否则盖住折线）或表格/正文内 <span class="ci-band">36.5–75.5</span> 区间徽章。**纪律**：区间必须与点估计并排出现；跨 0 的差值只能写「不得声称有差异」，不得只给点估计；只给区间不给点估计同样不合格
      - 视点综合（v0.2.13）：h3 标题后紧跟 .viewpoint-meta 信息条（.viewpoint-snap 徽章「动态快照 · 日期」+ 一句说明）即视为视点综合小节；h3 保持 <main> 直接子级以保留自动编号（h3:has(+ .viewpoint-meta) 只调间距不动编号）；LLM --viewpoint md 注入时置于该节正文前
      - 表格内「高赞代表」条目（v0.2.13）：cell 内用 .quote-list > .quote-item（.quote-like 点赞徽章 + .quote-txt 正文），多条自动虚线分隔、窄屏单列——替代「[赞N] 文字；[赞M] 文字」糊成一团的写法
      - 立场卡组 + 论证链带（v0.2.13，视点综合 5.1.2）：.scards > .scard（.scard-head 名/占比 pill/视角 + .ssteps 论证链步骤节点带（自动数字圆点+箭头）+ .scard-label + 原文 .quote-list + .scard-note 防呆）；结构化代替「1. 立场名：长段…2. …」连排；语义细节（反讽/少数派警示）保留在卡内文字
